@@ -57,10 +57,12 @@ h1{font-size:32px;font-weight:700;letter-spacing:-.02em;margin:0;line-height:1.1
 .seg button{border:0;background:none;padding:6px 12px;border-radius:8px;font-weight:500;color:var(--muted);white-space:nowrap;transition:color .15s,background .15s,box-shadow .15s}
 .seg button:hover{color:var(--ink)}
 .seg button[aria-pressed="true"]{color:#fff;background:linear-gradient(180deg,#6A9DFF,#3D74EA);box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 6px 14px -4px rgba(79,140,255,.7)}
-.range{display:inline-flex;align-items:center;gap:8px;color:var(--muted)}
-.range select{font:inherit;color:var(--ink);background:var(--well);border:1px solid var(--line-soft);border-radius:9px;padding:6px 28px 6px 10px;box-shadow:var(--sunk);appearance:none;-webkit-appearance:none;
-  background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 15px) 52%,calc(100% - 10px) 52%;background-size:5px 5px;background-repeat:no-repeat}
-.range select option{background:#111A28}
+.cal{display:inline-flex;align-items:center;gap:12px;color:var(--muted);flex-wrap:wrap}
+.cal label{display:inline-flex;align-items:center;gap:8px;font-weight:500}
+.cal input[type=date]{font:inherit;color:var(--ink);background:var(--well);border:1px solid var(--line-soft);border-radius:10px;padding:7px 10px;box-shadow:var(--sunk);color-scheme:dark;min-width:150px;cursor:pointer}
+.cal input[type=date]:focus{outline:2px solid var(--c1);outline-offset:0}
+.cal input[type=date]::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.85;filter:invert(62%) sepia(60%) hue-rotate(185deg) saturate(500%)}
+body.busy .kpis,body.busy .grid{opacity:.5;transition:opacity .2s}
 .chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .chip{--k:var(--sun);display:inline-flex;align-items:center;gap:6px;background:color-mix(in srgb,var(--k) 18%,#0F1724);color:var(--ink);border:1px solid color-mix(in srgb,var(--k) 55%,transparent);border-radius:999px;padding:3px 6px 3px 10px;font-size:13px;box-shadow:0 0 14px -2px color-mix(in srgb,var(--k) 45%,transparent)}
 .chip span{color:var(--muted)}
@@ -189,15 +191,11 @@ footer{color:var(--faint);font-size:12.5px;padding:0 0 40px}
 
 <div class="bar">
   <div class="wrap">
-    <div class="seg" id="presets" role="group" aria-label="Period">
-      <button data-p="m1">This month</button>
-      <button data-p="m3">3 months</button>
-      <button data-p="m6">6 months</button>
-      <button data-p="m12">12 months</button>
-      <button data-p="fy">This FY</button>
-      <button data-p="all">All time</button>
+    <div class="cal" role="group" aria-label="Date range">
+      <label>From <input type="date" id="dFrom" aria-label="From date"></label>
+      <label>to <input type="date" id="dTo" aria-label="To date"></label>
+      <button class="linkbtn" id="dAll" hidden>Show all dates</button>
     </div>
-    <span class="range"><select id="fromM" aria-label="From month"></select><span>to</span><select id="toM" aria-label="To month"></select></span>
     <div class="chips" id="chips"></div>
     <span class="spacer"></span>
   </div>
@@ -250,8 +248,8 @@ footer{color:var(--faint);font-size:12.5px;padding:0 0 40px}
 const $ = s => document.querySelector(s);
 const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DIMS = ['warehouse','category','group','state'];
-const CPOS = {warehouse:1, category:2, group:3, state:4};   // positions in summary.cube rows
-const DPOS = {warehouse:1, group:2, state:3};               // positions in summary.dn_cube rows
+const CPOS = {warehouse:1, category:2, group:3, state:4};   // positions in cube rows
+const DPOS = {warehouse:1, group:2, state:3};               // positions in dn_cube rows
 const DIM_LABEL = {warehouse:'Warehouse', category:'Category', group:'Customer group', state:'State'};
 const CAP = 250000, RH = 34;
 const PAL = ['--c1','--c2','--c3','--c4','--c5','--c6','--c7','--c8','--c9','--c10'];
@@ -269,13 +267,30 @@ function inr(v, parts) {
   return parts ? {n: '₹' + s, u} : `₹${s}${u ? ' ' + u : ''}`;
 }
 const fmtM = (m, metric) => metric === 'amount' ? inr(m) : nfI.format(m);
-const mLabel = k => { const [y, m] = k.split('-'); return `${MON[+m - 1]} ${y}`; };
-const rangeLabel = (a, b) => a === b ? mLabel(M[a]) : `${mLabel(M[a])} – ${mLabel(M[b])}`;
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const num = v => { if (v == null || v === '') return 0; const n = parseFloat(String(v).replace(/,/g, '')); return isNaN(n) ? 0 : n; };
 function fmtDate(v) {
   if (!v) return '';
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v);
   return m ? `${+m[3]} ${MON[+m[2] - 1]} ${m[1]}` : v;
+}
+const dateRangeLabel = (f, t) => f === t ? fmtDate(f) : `${fmtDate(f)} – ${fmtDate(t)}`;
+
+// ---------- Dates (ISO yyyy-mm-dd strings) ----------
+const toD = s => new Date(s + 'T00:00:00Z');
+const isoD = d => d.toISOString().slice(0, 10);
+const addDays = (s, n) => { const d = toD(s); d.setUTCDate(d.getUTCDate() + n); return isoD(d); };
+const daysBetween = (a, b) => Math.round((toD(b) - toD(a)) / 864e5);
+const monthEndOf = k => { const [y, m] = k.split('-').map(Number); return isoD(new Date(Date.UTC(y, m, 0))); };
+const dateCache = new Map();
+function rowDate(v) {
+  if (!v) return '';
+  let k = dateCache.get(v);
+  if (k !== undefined) return k;
+  if (/^\d{4}-\d{2}-\d{2}/.test(v)) k = v.slice(0, 10);
+  else { const d = new Date(v); k = isNaN(d) ? '' : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+  if (dateCache.size < 5000) dateCache.set(v, k);
+  return k;
 }
 
 // ---------- Customer rules (keep identical to customer_info() in sync_dn.py) ----------
@@ -295,72 +310,118 @@ function customerInfo(c) {
 const norm = (v, empty) => (v || '').split(/\s+/).filter(Boolean).join(' ') || empty;
 
 // ---------- State ----------
-let S, M, manifest;
-const st = {range: [0, 0], metric: 'amount', F: {warehouse: new Set(), category: new Set(), group: new Set(), state: new Set()}, q: '', expanded: {}};
+let S, M, manifest, cubeByMonth, dnByMonth;
+const st = {from: '', to: '', metric: 'amount', F: {warehouse: new Set(), category: new Set(), group: new Set(), state: new Set()}, q: '', expanded: {}};
+const view = {cube: [], dn: [], prev: null, prevLabel: ''};
+const clampDate = v => v < S.first_date ? S.first_date : v > S.last_date ? S.last_date : v;
+const isAllDates = () => st.from === S.first_date && st.to === S.last_date;
 
 function readHash() {
   try {
     const h = JSON.parse(decodeURIComponent(location.hash.slice(1)) || '{}');
-    if (h.r) { const a = M.indexOf(h.r[0]), b = M.indexOf(h.r[1]); if (a >= 0 && b >= a) st.range = [a, b]; }
+    const ok = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+    if (Array.isArray(h.r) && ok(h.r[0]) && ok(h.r[1])) {
+      let a = clampDate(h.r[0]), b = clampDate(h.r[1]); if (a > b) [a, b] = [b, a];
+      st.from = a; st.to = b;
+    }
     if (h.m) st.metric = h.m;
     for (const d of DIMS) if (h[d]) st.F[d] = new Set(h[d].map(n => S.dims[d].indexOf(n)).filter(i => i >= 0));
     if (h.q) st.q = h.q;
   } catch (e) {}
 }
 function writeHash() {
-  const h = {r: [M[st.range[0]], M[st.range[1]]], m: st.metric};
+  const h = {r: [st.from, st.to], m: st.metric};
   for (const d of DIMS) if (st.F[d].size) h[d] = [...st.F[d]].map(i => S.dims[d][i]);
   if (st.q) h.q = st.q;
   history.replaceState(null, '', '#' + encodeURIComponent(JSON.stringify(h)));
 }
 
-// ---------- Aggregation over the summary cube ----------
+// ---------- Date range -> month pieces ----------
+// Whole months come from the pre-built summary; part-months at the edges are computed from the raw rows.
+const mStart = i => i === 0 ? S.first_date : `${M[i]}-01`;
+const mEnd = i => i === M.length - 1 ? S.last_date : monthEndOf(M[i]);
+function segments(f, t) {
+  const out = [];
+  for (let i = 0; i < M.length; i++) {
+    const a = mStart(i), b = mEnd(i);
+    if (b < f || a > t) continue;
+    out.push({i, full: f <= a && t >= b, f: f > a ? f : a, t: t < b ? t : b});
+  }
+  return out;
+}
+function dimIdx(k, name) {
+  let i = S.dimMap[k].get(name);
+  if (i === undefined) { i = S.dims[k].length; S.dims[k].push(name); S.dimMap[k].set(name, i); }
+  return i;
+}
+const partCache = new Map();
+async function partial(seg) {
+  const key = `${seg.i}|${seg.f}|${seg.t}`;
+  if (partCache.has(key)) return partCache.get(key);
+  const blob = await getMonth(M[seg.i]);
+  const cube = new Map(), dn = new Map(), cust = new Map();
+  await parseBlob(blob, rows => {
+    const I = raw.idx;
+    for (const r of rows) {
+      const d = rowDate(r[I.date]);
+      if (d < seg.f || d > seg.t) continue;
+      let ci = cust.get(r[I.proj]); if (!ci) { ci = customerInfo(r[I.proj]); cust.set(r[I.proj], ci); }
+      const w = dimIdx('warehouse', norm(r[I.wh], 'No warehouse')), c = dimIdx('category', norm(r[I.cat], 'Uncategorised'));
+      const g = dimIdx('group', ci[0]), s = dimIdx('state', ci[1]);
+      const k = `${w}|${c}|${g}|${s}`;
+      let cell = cube.get(k); if (!cell) { cell = [seg.i, w, c, g, s, 0, 0, new Set()]; cube.set(k, cell); }
+      cell[5]++; cell[6] += num(r[I.amt]); cell[7].add(r[I.dn]);
+      const k2 = `${w}|${g}|${s}`;
+      let dc = dn.get(k2); if (!dc) { dc = [seg.i, w, g, s, new Set()]; dn.set(k2, dc); }
+      dc[4].add(r[I.dn]);
+    }
+  }, () => true);
+  const res = {cube: [...cube.values()].map(c => [c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7].size]),
+               dn: [...dn.values()].map(c => [c[0], c[1], c[2], c[3], c[4].size])};
+  partCache.set(key, res);
+  return res;
+}
+async function assemble(f, t) {
+  const cube = [], dn = [];
+  for (const sg of segments(f, t)) {
+    const p = sg.full ? {cube: cubeByMonth[sg.i], dn: dnByMonth[sg.i]} : await partial(sg);
+    for (const r of p.cube) cube.push(r);
+    for (const r of p.dn) dn.push(r);
+  }
+  return {cube, dn};
+}
+
+// ---------- Aggregation ----------
 const okC = (r, skip) => DIMS.every(d => d === skip || !st.F[d].size || st.F[d].has(r[CPOS[d]]));
 const okD = (r, skip) => ['warehouse','group','state'].every(d => d === skip || !st.F[d].size || st.F[d].has(r[DPOS[d]]));
-
-function totals(a, b) {
+function totals(v) {
   let amount = 0, lines = 0, catDns = 0, dns = 0;
-  for (const r of S.cube) if (r[0] >= a && r[0] <= b && okC(r)) { lines += r[5]; amount += r[6]; catDns += r[7]; }
+  for (const r of v.cube) if (okC(r)) { lines += r[5]; amount += r[6]; catDns += r[7]; }
   if (st.F.category.size) dns = catDns;
-  else for (const r of S.dn_cube) if (r[0] >= a && r[0] <= b && okD(r)) dns += r[4];
+  else for (const r of v.dn) if (okD(r)) dns += r[4];
   return {amount, lines, dns};
 }
 function breakdown(dim, metric) {
-  const [a, b] = st.range, out = new Map();
+  const out = new Map();
   if (metric === 'dns' && dim !== 'category' && !st.F.category.size) {
-    for (const r of S.dn_cube) if (r[0] >= a && r[0] <= b && okD(r, dim)) out.set(r[DPOS[dim]], (out.get(r[DPOS[dim]]) || 0) + r[4]);
+    for (const r of view.dn) if (okD(r, dim)) out.set(r[DPOS[dim]], (out.get(r[DPOS[dim]]) || 0) + r[4]);
   } else {
     const k = metric === 'amount' ? 6 : metric === 'lines' ? 5 : 7, p = CPOS[dim];
-    for (const r of S.cube) if (r[0] >= a && r[0] <= b && okC(r, dim)) out.set(r[p], (out.get(r[p]) || 0) + r[k]);
+    for (const r of view.cube) if (okC(r, dim)) out.set(r[p], (out.get(r[p]) || 0) + r[k]);
   }
   const last = name => (dim === 'state' && S.dims.state[name] === NO_STATE) || (dim === 'group' && S.dims.group[name] === 'Other customers');
   return [...out].filter(([, v]) => v !== 0).sort((x, y) => (last(x[0]) - last(y[0])) || (y[1] - x[1]));
 }
 
-// ---------- Rendering: header, chips, KPIs ----------
+// ---------- Rendering: header, controls, chips, KPIs ----------
 function renderHeader() {
   const last = new Date(manifest.last_refresh);
   $('#fresh').innerHTML = `${nfI.format(manifest.total_rows)} line items from ${fmtDate(S.first_date)} to <b>${fmtDate(S.last_date)}</b>. Refreshed ${last.toLocaleString('en-IN', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'})}.`;
 }
-function presetRanges() {
-  const n = M.length - 1, [y, m] = M[n].split('-').map(Number);
-  const fyStart = `${m >= 4 ? y : y - 1}-04`;
-  const fyIdx = Math.max(0, M.findIndex(k => k >= fyStart));
-  return {m1: [n, n], m3: [Math.max(0, n - 2), n], m6: [Math.max(0, n - 5), n], m12: [Math.max(0, n - 11), n], fy: [fyIdx, n], all: [0, n]};
-}
-function renderPresets() {
-  const pr = presetRanges();
-  document.querySelectorAll('#presets button').forEach(b => {
-    const r = pr[b.dataset.p];
-    b.setAttribute('aria-pressed', r[0] === st.range[0] && r[1] === st.range[1]);
-  });
-  $('#fromM').value = st.range[0]; $('#toM').value = st.range[1];
+function renderControls() {
+  $('#dFrom').value = st.from; $('#dTo').value = st.to;
+  $('#dAll').hidden = isAllDates();
   document.querySelectorAll('#metric button').forEach(b => b.setAttribute('aria-pressed', b.dataset.m === st.metric));
-}
-function isFullMonth(i) {
-  const [y, m] = M[i].split('-').map(Number);
-  const end = new Date(y, m, 0).getDate();
-  return S.last_date > `${M[i]}-${String(end).padStart(2, '0')}` || S.last_date === `${M[i]}-${String(end).padStart(2, '0')}`;
 }
 function renderChips() {
   const el = $('#chips'); el.innerHTML = '';
@@ -369,12 +430,12 @@ function renderChips() {
     any = true;
     const c = document.createElement('span'); c.className = 'chip'; c.style.setProperty('--k', `var(${DIM_COLOR[d]})`);
     c.innerHTML = `<span>${DIM_LABEL[d]}:</span> ${esc(S.dims[d][i])} <button aria-label="Remove ${esc(S.dims[d][i])} filter">×</button>`;
-    c.querySelector('button').onclick = () => { st.F[d].delete(i); update(); };
+    c.querySelector('button').onclick = () => { st.F[d].delete(i); refresh(); };
     el.appendChild(c);
   }
   if (any) {
     const b = document.createElement('button'); b.className = 'linkbtn'; b.textContent = 'Clear filters';
-    b.onclick = () => { DIMS.forEach(d => st.F[d].clear()); update(); };
+    b.onclick = () => { DIMS.forEach(d => st.F[d].clear()); refresh(); };
     el.appendChild(b);
   }
 }
@@ -386,10 +447,7 @@ function deltaHtml(cur, prev, label) {
   return `<div class="delta"><b class="${cls}">${p >= 0 ? '▲' : '▼'} ${Math.abs(p).toFixed(1)}%</b> vs ${label}</div>`;
 }
 function renderKpis() {
-  const [a, b] = st.range, len = b - a + 1;
-  const cur = totals(a, b);
-  let prev = null, plabel = `Since ${mLabel(M[a])}`;
-  if (a - len >= 0) { prev = totals(a - len, a - 1); plabel = rangeLabel(a - len, a - 1); }
+  const cur = totals(view), prev = view.prev ? totals(view.prev) : null, plabel = view.prevLabel;
   const avg = cur.dns ? cur.amount / cur.dns : 0, pavg = prev && prev.dns ? prev.amount / prev.dns : (prev ? 0 : null);
   const v = inr(cur.amount, true), av = inr(avg, true);
   const dnNote = st.F.category.size > 1 ? ' title="Delivery notes containing any selected category; a DN with several selected categories is counted once per category"' : '';
@@ -423,7 +481,7 @@ function renderLists() {
     const strip = document.querySelector(`[data-share="${dim}"]`);
     const pos = rows.filter(r => r[1] > 0), ptot = pos.reduce((s, r) => s + r[1], 0);
     strip.innerHTML = ptot ? pos.map(([i, v]) => `<span style="width:${v / ptot * 100}%;background:${colorFor(dim, i)};opacity:${st.F[dim].size && !st.F[dim].has(i) ? .3 : 1}" title="${esc(S.dims[dim][i])}: ${fmtM(v, st.metric)} (${(v / ptot * 100).toFixed(1)}%)"></span>`).join('') : '';
-    if (!rows.length) { el.innerHTML = '<div class="empty">Nothing for this period and filters.</div>'; return; }
+    if (!rows.length) { el.innerHTML = '<div class="empty">Nothing for these dates and filters.</div>'; return; }
     el.innerHTML = rows.slice(0, limit).map(([i, v]) => {
       const name = S.dims[dim][i], sel = st.F[dim].has(i);
       return `<button class="li${sel ? ' sel' : ''}" data-i="${i}" aria-pressed="${sel}" title="${esc(name)}" style="--k:${colorFor(dim, i)}">
@@ -431,7 +489,7 @@ function renderLists() {
         <span class="v">${fmtM(v, st.metric)}</span><span class="sh">${total ? (v / total * 100).toFixed(v / total < .1 ? 1 : 0) : 0}%</span></button>`;
     }).join('') + (rows.length > 8 ? `<button class="more">${st.expanded[dim] ? 'Show fewer' : `Show all ${rows.length}`}</button>` : '');
     el.querySelectorAll('.li').forEach(b => b.onclick = () => {
-      const i = +b.dataset.i; st.F[dim].has(i) ? st.F[dim].delete(i) : st.F[dim].add(i); update();
+      const i = +b.dataset.i; st.F[dim].has(i) ? st.F[dim].delete(i) : st.F[dim].add(i); refresh();
     });
     const more = el.querySelector('.more'); if (more) more.onclick = () => { st.expanded[dim] = !st.expanded[dim]; renderLists(); };
   });
@@ -447,6 +505,8 @@ const COLS = {DN_NO:['DN no.',150,1,10], posting_date:['Date',100,0,8], Project:
 // Shown in the CSV download but not on screen (always the same value, or usually empty)
 const HIDE = new Set(['workflow_state', 'target_warehouse', 'docstatus']);
 const colSpec = h => COLS[h] || [h, 110, 1, 0];
+const NUMC = new Set(['qty','rate','amount','docstatus']);
+const raw = {header: null, idx: null, rows: [], matched: 0, done: false, token: 0, sort: null, view: null, layout: null};
 function computeLayout() {
   const W = $('#tblWrap').clientWidth - 2;
   let vis = raw.header.map((h, i) => i).filter(i => !HIDE.has(raw.header[i]));
@@ -456,11 +516,9 @@ function computeLayout() {
     vis = vis.filter(i => i !== drop);
   }
   const spare = Math.max(0, W - minSum()), wsum = vis.reduce((s, i) => s + colSpec(raw.header[i])[2], 0) || 1;
-  raw.layout = {vis, widths: vis.map(i => { const c = colSpec(raw.header[i]); return Math.floor(c[1] + spare * c[2] / wsum); }), W};
+  raw.layout = {vis, widths: vis.map(i => { const c = colSpec(raw.header[i]); return Math.floor(c[1] + spare * c[2] / wsum); })};
 }
-const visCols = () => (raw.layout || computeLayout() || raw.layout).vis;
-const NUMC = new Set(['qty','rate','amount','docstatus']);
-const raw = {header: null, idx: null, rows: [], matched: 0, done: false, token: 0, sort: null, view: null};
+const visCols = () => { if (!raw.layout) computeLayout(); return raw.layout.vis; };
 const blobCache = new Map();
 async function getMonth(m) {
   if (blobCache.has(m)) { const b = blobCache.get(m); blobCache.delete(m); blobCache.set(m, b); return b; }
@@ -492,13 +550,14 @@ function setHeader(h) {
   h[0] = h[0].replace(/^\uFEFF/, '');
   raw.header = h;
   const f = n => h.indexOf(n);
-  raw.idx = {dn: f('DN_NO'), date: f('posting_date'), proj: f('Project'), wh: f('source_warehouse'), cat: f('item_category'), code: f('item_code'), name: f('item_name')};
+  raw.idx = {dn: f('DN_NO'), date: f('posting_date'), proj: f('Project'), wh: f('source_warehouse'), cat: f('item_category'), code: f('item_code'), name: f('item_name'), amt: f('amount')};
   buildHead();
 }
-function makeMatcher() {
+function makeMatcher(seg) {
   const names = {}; for (const d of DIMS) names[d] = st.F[d].size ? new Set([...st.F[d]].map(i => S.dims[d][i])) : null;
-  const q = st.q.trim().toLowerCase(), cache = new Map(), I = raw.idx;
+  const q = st.q.trim().toLowerCase(), cache = new Map(), I = raw.idx, checkDate = !seg.full;
   return row => {
+    if (checkDate) { const d = rowDate(row[I.date]); if (d < seg.f || d > seg.t) return false; }
     if (names.warehouse && !names.warehouse.has(norm(row[I.wh], 'No warehouse'))) return false;
     if (names.category && !names.category.has(norm(row[I.cat], 'Uncategorised'))) return false;
     if (names.group || names.state) {
@@ -513,22 +572,23 @@ function makeMatcher() {
     return true;
   };
 }
-const monthsInRange = () => M.slice(st.range[0], st.range[1] + 1).reverse(); // newest first
+const segsNewestFirst = () => segments(st.from, st.to).reverse();
 async function loadRaw() {
   const my = ++raw.token, live = () => my === raw.token;
   raw.rows = []; raw.matched = 0; raw.done = false; raw.sort = null; raw.view = null;
   const searching = !!st.q.trim();
-  const known = searching ? null : totals(...st.range).lines;
-  const months = monthsInRange();
+  const known = searching ? null : totals(view).lines;
+  const segs = segsNewestFirst();
   setProg(0); renderRawStat(known, true); renderBody();
-  let match = null, lastPaint = 0;
+  let lastPaint = 0;
   try {
-    for (let k = 0; k < months.length; k++) {
+    for (let k = 0; k < segs.length; k++) {
       if (!live()) return;
-      const blob = await getMonth(months[k]);
+      const blob = await getMonth(M[segs[k].i]);
       if (!live()) return;
+      let match = null;
       await parseBlob(blob, rows => {
-        if (!match) match = makeMatcher();
+        if (!match) match = makeMatcher(segs[k]);
         for (const row of rows) {
           if (!match(row)) continue;
           raw.matched++;
@@ -537,8 +597,8 @@ async function loadRaw() {
         const now = performance.now();
         if (now - lastPaint > 250) { lastPaint = now; renderRawStat(known, true); renderBody(); }
       }, live);
-      setProg((k + 1) / months.length);
-      if (!searching && raw.rows.length >= CAP) break;   // enough rows to show; the total is known from the summary
+      setProg((k + 1) / segs.length);
+      if (!searching && raw.rows.length >= CAP) break;   // enough rows to show; the total is already known
     }
   } catch (e) {
     if (live()) { $('#rawstat').textContent = e.message; setProg(null); }
@@ -550,20 +610,20 @@ async function loadRaw() {
 }
 function setProg(p) { const el = $('#prog'); el.classList.toggle('on', p != null); el.firstElementChild.style.width = ((p || 0) * 100) + '%'; }
 function renderRawStat(total, loading) {
-  const shown = raw.rows.length, el = $('#rawstat');
+  const shown = raw.rows.length, el = $('#rawstat'), period = dateRangeLabel(st.from, st.to);
   const searching = !!st.q.trim();
-  if (loading && !shown) { el.textContent = searching ? `Searching ${rangeLabel(...st.range)}…` : 'Loading line items…'; return; }
+  if (loading && !shown) { el.textContent = searching ? `Searching ${period}…` : 'Loading line items…'; return; }
   if (!searching && loading) { el.innerHTML = `Loading the newest line items… <b>${nfI.format(shown)}</b> of <b>${nfI.format(total)}</b>`; return; }
-  if (searching && loading) { el.innerHTML = `<b>${nfI.format(raw.matched)}</b> matches so far, still searching ${rangeLabel(...st.range)}…`; return; }
+  if (searching && loading) { el.innerHTML = `<b>${nfI.format(raw.matched)}</b> matches so far, still searching ${period}…`; return; }
   const t = total ?? raw.matched;
-  if (!t) { el.textContent = searching ? `No line items match "${st.q}" in ${rangeLabel(...st.range)}.` : 'No line items for this period and filters.'; return; }
+  if (!t) { el.textContent = searching ? `No line items match "${st.q}" between ${period}.` : 'No line items for these dates and filters.'; return; }
   el.innerHTML = shown < t
     ? `Showing the newest <b>${nfI.format(shown)}</b> of <b>${nfI.format(t)}</b> line items. Search or filter to narrow down; the download includes all ${nfI.format(t)}.`
     : `<b>${nfI.format(t)}</b> line items. Click a column heading to sort.`;
 }
 function buildHead() {
   if (!raw.header) return;
-  const sortable = raw.done && raw.rows.length === (st.q.trim() ? raw.matched : totals(...st.range).lines);
+  const sortable = raw.done && raw.rows.length === (st.q.trim() ? raw.matched : totals(view).lines);
   computeLayout();
   const vis = raw.layout.vis;
   $('#tbl colgroup').innerHTML = raw.layout.widths.map(w => `<col style="width:${w}px">`).join('');
@@ -579,7 +639,7 @@ function sortBy(i) {
   const isNum = NUMC.has(raw.header[i]);
   raw.view = raw.rows.slice().sort((a, b) => {
     const x = a[i], y = b[i];
-    return (isNum ? (parseFloat(x) || 0) - (parseFloat(y) || 0) : String(x).localeCompare(String(y))) * dir;
+    return (isNum ? num(x) - num(y) : String(x).localeCompare(String(y))) * dir;
   });
   buildHead(); renderBody();
 }
@@ -598,8 +658,8 @@ function renderBody() {
       const v = row[i] ?? '';
       if (c === 'DN_NO') return `<td class="dn" data-dn="${esc(v)}">${esc(v)}</td>`;
       if (c === 'posting_date') return `<td>${fmtDate(v)}</td>`;
-      if (c === 'amount') return `<td class="n amt">${v === '' ? '' : nf2.format(parseFloat(String(v).replace(/,/g, '')) || 0)}</td>`;
-      if (NUMC.has(c)) return `<td class="n">${v === '' ? '' : (c === 'docstatus' ? esc(v) : nf2.format(parseFloat(String(v).replace(/,/g, '')) || 0))}</td>`;
+      if (c === 'amount') return `<td class="n amt">${v === '' ? '' : nf2.format(num(v))}</td>`;
+      if (NUMC.has(c)) return `<td class="n">${v === '' ? '' : (c === 'docstatus' ? esc(v) : nf2.format(num(v)))}</td>`;
       return `<td title="${esc(v)}">${esc(v)}</td>`;
     }).join('') + '</tr>';
   }
@@ -615,32 +675,30 @@ $('#q').addEventListener('input', e => { clearTimeout(qTimer); qTimer = setTimeo
 $('#dl').addEventListener('click', async () => {
   const btn = $('#dl'); btn.disabled = true;
   const my = ++raw.token, live = () => my === raw.token;  // pauses table loading while downloading
-  const months = monthsInRange(), filtered = DIMS.some(d => st.F[d].size) || st.q.trim();
+  const segs = segsNewestFirst(), dimF = DIMS.some(d => st.F[d].size), q = st.q.trim();
   const parts = [];
+  let n = 0;
   try {
-    if (!filtered) {
-      for (let k = 0; k < months.length; k++) {
-        $('#rawstat').textContent = `Preparing download: ${mLabel(months[k])} (${k + 1} of ${months.length})…`; setProg(k / months.length);
-        const blob = await getMonth(months[k]);
-        const head = new Uint8Array(await blob.slice(0, 1 << 20).arrayBuffer()), nl = head.indexOf(10);
-        if (!parts.length) parts.push(blob.slice(0, nl + 1));
+    for (let k = 0; k < segs.length; k++) {
+      const sg = segs[k];
+      $('#rawstat').textContent = `Preparing download: ${MON[+M[sg.i].slice(5) - 1]} ${M[sg.i].slice(0, 4)} (${k + 1} of ${segs.length})…`; setProg(k / segs.length);
+      const blob = await getMonth(M[sg.i]);
+      const head = new Uint8Array(await blob.slice(0, 1 << 20).arrayBuffer()), nl = head.indexOf(10);
+      if (!parts.length) parts.push('\uFEFF' + new TextDecoder().decode(head.slice(0, nl)).replace(/^\uFEFF/, '').replace(/\r$/, '') + '\n');
+      if (sg.full && !dimF && !q) {          // whole month, nothing to filter: copy it as-is
         parts.push(blob.slice(nl + 1));
         const lastByte = new Uint8Array(await blob.slice(-1).arrayBuffer())[0];
         if (lastByte !== 10) parts.push('\n');
-      }
-    } else {
-      let match = null, n = 0;
-      for (let k = 0; k < months.length; k++) {
-        $('#rawstat').textContent = `Preparing download: ${mLabel(months[k])} (${k + 1} of ${months.length}), ${nfI.format(n)} rows so far…`; setProg(k / months.length);
-        const blob = await getMonth(months[k]);
+      } else {
+        let match = null;
         await parseBlob(blob, rows => {
-          if (!match) { match = makeMatcher(); parts.push('\uFEFF' + Papa.unparse([raw.header]) + '\n'); }
+          if (!match) match = makeMatcher(sg);
           const keep = rows.filter(match); n += keep.length;
           if (keep.length) parts.push(Papa.unparse(keep) + '\n');
         }, live);
       }
     }
-    const name = `DN_line_items_${M[st.range[0]]}_to_${M[st.range[1]]}${filtered ? '_filtered' : ''}.csv`;
+    const name = `DN_line_items_${st.from}_to_${st.to}${dimF || q ? '_filtered' : ''}.csv`;
     const url = URL.createObjectURL(new Blob(parts, {type: 'text/csv'}));
     const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
@@ -650,17 +708,41 @@ $('#dl').addEventListener('click', async () => {
 });
 
 // ---------- Wiring ----------
-function update() {
-  writeHash(); renderPresets(); renderChips(); renderKpis(); renderLists();
-  loadRaw();
+// refresh(): filters changed (same dates). update(): dates changed, so part-months may need computing.
+function refresh() { writeHash(); renderControls(); renderChips(); renderKpis(); renderLists(); loadRaw(); }
+let upTok = 0;
+async function update() {
+  const my = ++upTok;
+  writeHash(); renderControls(); renderChips();
+  const len = daysBetween(st.from, st.to) + 1, pt = addDays(st.from, -1), pf = addDays(pt, -(len - 1));
+  const hasPrev = pf >= S.first_date;
+  const slow = segments(st.from, st.to).some(s => !s.full) || (hasPrev && segments(pf, pt).some(s => !s.full));
+  if (slow) { document.body.classList.add('busy'); $('#rawstat').textContent = 'Calculating figures for the selected dates…'; }
+  try {
+    const cur = await assemble(st.from, st.to);
+    const prev = hasPrev ? await assemble(pf, pt) : null;
+    if (my !== upTok) return;
+    view.cube = cur.cube; view.dn = cur.dn; view.prev = prev;
+    view.prevLabel = hasPrev ? dateRangeLabel(pf, pt) : `Since ${fmtDate(st.from)}`;
+  } catch (e) {
+    if (my === upTok) { document.body.classList.remove('busy'); $('#rawstat').textContent = e.message; }
+    return;
+  }
+  document.body.classList.remove('busy');
+  renderKpis(); renderLists(); loadRaw();
 }
-document.querySelector('#presets').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; st.range = presetRanges()[b.dataset.p]; update(); });
-document.querySelector('#metric').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; st.metric = b.dataset.m; writeHash(); renderPresets(); renderLists(); });
-function setupRange() {
-  const opts = M.map((k, i) => `<option value="${i}">${mLabel(k)}${i === M.length - 1 && !isFullMonth(i) ? ' (to date)' : ''}</option>`).join('');
-  $('#fromM').innerHTML = opts; $('#toM').innerHTML = opts;
-  const onChange = () => { let a = +$('#fromM').value, b = +$('#toM').value; if (a > b) [a, b] = [b, a]; st.range = [a, b]; update(); };
-  $('#fromM').addEventListener('change', onChange); $('#toM').addEventListener('change', onChange);
+document.querySelector('#metric').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; st.metric = b.dataset.m; writeHash(); renderControls(); renderLists(); });
+function setupCalendar() {
+  const f = $('#dFrom'), t = $('#dTo');
+  for (const el of [f, t]) { el.min = S.first_date; el.max = S.last_date; }
+  const onChange = () => {
+    let a = clampDate(f.value || S.first_date), b = clampDate(t.value || S.last_date);
+    if (a > b) [a, b] = [b, a];
+    if (a === st.from && b === st.to) { renderControls(); return; }
+    st.from = a; st.to = b; update();
+  };
+  f.addEventListener('change', onChange); t.addEventListener('change', onChange);
+  $('#dAll').addEventListener('click', () => { st.from = S.first_date; st.to = S.last_date; update(); });
 }
 let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (raw.header) { buildHead(); renderBody(); } }, 150); });
 $('#copyLink').addEventListener('click', async () => {
@@ -683,11 +765,15 @@ $('#copyLink').addEventListener('click', async () => {
     $('#fresh').textContent = '';
     return;
   }
-  st.range = [0, M.length - 1];
+  S.dimMap = {}; for (const d of DIMS) S.dimMap[d] = new Map(S.dims[d].map((n, i) => [n, i]));
+  cubeByMonth = M.map(() => []); dnByMonth = M.map(() => []);
+  for (const r of S.cube) cubeByMonth[r[0]].push(r);
+  for (const r of S.dn_cube) dnByMonth[r[0]].push(r);
+  st.from = S.first_date; st.to = S.last_date;
   readHash();
   if (st.q) $('#q').value = st.q;
   $('#msg').remove(); $('#app').hidden = false;
-  renderHeader(); setupRange(); setupTilt(); update();
+  renderHeader(); setupCalendar(); setupTilt(); update();
 })();
 </script>
 </body>
