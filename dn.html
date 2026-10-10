@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DN data – date range export</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚚</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+:root{
+  --ink:#1C2B39; --muted:#5B6B79; --bg:#EEF2F5; --panel:#FFFFFF; --line:#D5DDE3;
+  --sun:#E8A317; --sun-soft:#FBEBC4; --sun-text:#8A5E00; --bar:#B9C6D1; --ok:#1F7A6D; --err:#B3261E;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ink:#E4EAF0; --muted:#97A6B3; --bg:#121A22; --panel:#1A2530; --line:#2C3A47;
+    --sun:#F2B533; --sun-soft:#3A2F14; --sun-text:#F2C25A; --bar:#3D5062; --ok:#4FBFAE; --err:#F08A80;
+  }
+}
+*,*::before,*::after{box-sizing:inherit}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 "Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;font-variant-numeric:tabular-nums}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 48px}
+h1{font-size:26px;font-weight:700;margin:0 0 4px;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:0 0 24px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:16px}
+.step{display:flex;gap:14px;align-items:flex-start}
+.num{flex:none;width:28px;height:28px;border-radius:50%;background:var(--sun-soft);color:var(--sun-text);font-weight:700;display:grid;place-items:center;font-size:14px}
+.step h2{font-size:16px;margin:2px 0 8px;font-weight:600}
+.step .body{flex:1;min-width:0}
+.hint{color:var(--muted);font-size:13.5px;margin:6px 0 0}
+button,.filebtn{font:inherit;font-weight:600;border-radius:7px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 14px;cursor:pointer}
+button:hover,.filebtn:hover{border-color:var(--muted)}
+button:focus-visible,.filebtn:focus-within,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+button.primary{background:var(--sun);border-color:var(--sun);color:#1C2B39}
+button.primary:hover{filter:brightness(.95)}
+button:disabled{opacity:.45;cursor:not-allowed}
+.filebtn input{position:absolute;opacity:0;width:1px;height:1px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+label.d{display:flex;flex-direction:column;font-size:13px;color:var(--muted);gap:4px}
+input[type=date]{font:inherit;padding:7px 10px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--ink)}
+.quick button{padding:6px 11px;font-weight:500;font-size:14px}
+.strip{display:flex;align-items:flex-end;gap:3px;height:96px;margin:18px 0 4px;overflow-x:auto;padding-bottom:2px}
+.m{flex:1 0 26px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;background:none;border:none;padding:0;height:100%;justify-content:flex-end;border-radius:4px}
+.m span.b{width:100%;background:var(--bar);border-radius:3px 3px 0 0;min-height:4px}
+.m.sel span.b{background:var(--sun)}
+.m small{font-size:11px;color:var(--muted);line-height:1}
+.m.sel small{color:var(--sun-text);font-weight:700}
+.yr{font-size:12px;color:var(--muted);display:flex;justify-content:space-between}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:16px}
+.stat{background:var(--panel);padding:14px 16px}
+.stat b{display:block;font-size:22px;font-weight:700}
+.stat span{color:var(--muted);font-size:13px}
+.status{font-size:14px;margin-top:10px;min-height:21px}
+.status.err{color:var(--err)} .status.ok{color:var(--ok)}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:8px;max-height:520px;overflow-y:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:6px 10px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:left}
+th{position:sticky;top:0;background:var(--panel);font-weight:600;z-index:1}
+td.n{text-align:right}
+.split{display:grid;grid-template-columns:280px 1fr;gap:16px}
+@media (max-width:820px){.split{grid-template-columns:1fr}}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Delivery Note data</h1>
+  <p class="sub">Delivery Note line items from ERP, January 2025 onward. Pick a date range, check the numbers, and download those rows as one CSV.</p>
+
+  <p class="hint" id="folderInfo" style="margin:-14px 0 20px">Loading available months…</p>
+
+  <div class="panel step" id="rangePanel" style="opacity:.5;pointer-events:none">
+    <div class="num">1</div>
+    <div class="body">
+      <h2>Choose a date range</h2>
+      <div class="row">
+        <label class="d">From<input type="date" id="from"></label>
+        <label class="d">To<input type="date" id="to"></label>
+        <div class="row quick">
+          <button data-m="1">Last month</button>
+          <button data-m="2">Last 2 months</button>
+          <button data-m="5">Last 5 months</button>
+          <button data-y="1">This year</button>
+          <button data-all="1">Everything</button>
+        </div>
+      </div>
+      <div class="strip" id="strip" aria-label="Months available. Click one month, then another to select a range."></div>
+      <div class="yr" id="yr"></div>
+      <div class="row" style="margin-top:14px">
+        <span class="num" style="margin-right:2px">2</span><button class="primary" id="show">Show data</button>
+        <span class="num" style="margin:0 2px 0 8px">3</span><button id="dl" disabled>Download CSV</button>
+      </div>
+      <div class="status" id="status"></div>
+    </div>
+  </div>
+
+  <div id="results" class="hidden">
+    <div class="stats">
+      <div class="stat"><b id="sRows">–</b><span>Line items</span></div>
+      <div class="stat"><b id="sDns">–</b><span>Delivery notes</span></div>
+      <div class="stat"><b id="sProj">–</b><span>Projects</span></div>
+      <div class="stat"><b id="sQty">–</b><span>Total quantity</span></div>
+      <div class="stat"><b id="sAmt">–</b><span>Total amount (₹)</span></div>
+    </div>
+    <div class="split">
+      <div class="panel" style="margin:0">
+        <h2 style="font-size:16px;margin:0 0 10px">By month</h2>
+        <div class="scroll" style="max-height:none"><table id="monthTbl"></table></div>
+      </div>
+      <div class="panel" style="margin:0;min-width:0">
+        <h2 style="font-size:16px;margin:0 0 4px">Preview</h2>
+        <p class="hint" style="margin:0 0 10px" id="prevNote"></p>
+        <div class="scroll"><table id="prevTbl"></table></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 0});
+const fmt2 = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 2});
+const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const PREVIEW_ROWS = 300, EXCEL_MAX = 1048575;
+
+let months = [];         // sorted ascending
+let result = null;       // last computed range
+let anchor = null;       // first click on month strip
+
+const pad = n => String(n).padStart(2, '0');
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const monthEnd = m => { const [y, mo] = m.split('-').map(Number); return iso(new Date(y, mo, 0)); };
+const monthLabel = m => { const [y, mo] = m.split('-'); return `${MON[+mo-1]} ${y}`; };
+
+// Dates may arrive as 2026-10-10, 2026-10-10T00:00:00Z or "October 10, 2026"
+const dateCache = new Map();
+function dateKey(v) {
+  if (!v) return '';
+  let k = dateCache.get(v);
+  if (k !== undefined) return k;
+  if (/^\d{4}-\d{2}-\d{2}/.test(v)) k = v.slice(0, 10);
+  else { const d = new Date(v); k = isNaN(d) ? '' : iso(d); }
+  if (dateCache.size < 5000) dateCache.set(v, k);
+  return k;
+}
+const num = v => { if (v == null || v === '') return 0; const n = parseFloat(String(v).replace(/,/g, '')); return isNaN(n) ? 0 : n; };
+
+function setStatus(msg, cls = '') { const s = $('status'); s.textContent = msg; s.className = 'status ' + cls; }
+
+// ---- Load the list of months from dn/manifest.json ----
+let manifest = null;
+async function loadManifest() {
+  try {
+    const res = await fetch('dn/manifest.json?t=' + Date.now(), {cache: 'no-store'});
+    if (!res.ok) throw new Error(res.status);
+    manifest = await res.json();
+  } catch (e) {
+    $('folderInfo').textContent = 'Could not load dn/manifest.json. Run the "Sync DN data" workflow in the Actions tab, then reload this page.';
+    return;
+  }
+  months = Object.keys(manifest.months).sort();
+  if (!months.length) { $('folderInfo').textContent = 'No DN data yet. Run the "Sync DN data" workflow, then reload.'; return; }
+  const when = new Date(manifest.last_refresh).toLocaleString('en-IN', {dateStyle: 'medium', timeStyle: 'short'});
+  $('folderInfo').textContent = `${fmt.format(manifest.total_rows)} rows from ${monthLabel(months[0])} to ${monthLabel(months.at(-1))}. Last refreshed ${when}.`;
+  $('rangePanel').style.opacity = 1; $('rangePanel').style.pointerEvents = 'auto';
+  drawStrip(); quickRange(2);
+}
+
+// Download one month and unzip it in the browser
+const monthCache = new Map();
+async function getMonth(m) {
+  if (monthCache.has(m)) return monthCache.get(m);
+  const info = manifest.months[m];
+  const res = await fetch(`dn/${info.file}?v=${encodeURIComponent(manifest.last_refresh)}`);
+  if (!res.ok) throw new Error(`Could not download ${info.file} (${res.status}).`);
+  const blob = await new Response(res.body.pipeThrough(new DecompressionStream('gzip'))).blob();
+  monthCache.set(m, blob);
+  return blob;
+}
+
+loadManifest();
+
+function drawStrip() {
+  const max = Math.max(...months.map(m => manifest.months[m].rows));
+  $('strip').innerHTML = months.map(m =>
+    `<button class="m" data-mon="${m}" title="${monthLabel(m)}: ${fmt.format(manifest.months[m].rows)} rows">
+       <span class="b" style="height:${Math.max(6, manifest.months[m].rows / max * 72)}px"></span>
+       <small>${MON[+m.slice(5)-1].slice(0,1)}</small></button>`).join('');
+  const years = [...new Set(months.map(m => m.slice(0,4)))];
+  $('yr').innerHTML = years.map(y => `<span>${y}</span>`).join('');
+  highlight();
+}
+function highlight() {
+  const a = $('from').value, b = $('to').value;
+  document.querySelectorAll('.m').forEach(el => {
+    const m = el.dataset.mon;
+    el.classList.toggle('sel', a && b && `${m}-01` <= b && monthEnd(m) >= a);
+  });
+}
+$('strip').addEventListener('click', e => {
+  const el = e.target.closest('.m'); if (!el) return;
+  const m = el.dataset.mon;
+  if (!anchor) { anchor = m; setRange(`${m}-01`, monthEnd(m)); }
+  else { const [x, y] = [anchor, m].sort(); setRange(`${x}-01`, monthEnd(y)); anchor = null; }
+});
+
+function setRange(a, b) { $('from').value = a; $('to').value = b; highlight(); $('dl').disabled = true; }
+['from','to'].forEach(id => $(id).addEventListener('change', () => { highlight(); $('dl').disabled = true; }));
+
+function quickRange(n) {
+  const today = new Date(), start = new Date(today);
+  start.setMonth(start.getMonth() - n); start.setDate(start.getDate() + 1);
+  setRange(iso(start), iso(today));
+}
+document.querySelector('.quick').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  anchor = null;
+  if (b.dataset.m) quickRange(+b.dataset.m);
+  else if (b.dataset.y) setRange(`${new Date().getFullYear()}-01-01`, iso(new Date()));
+  else setRange(`${months[0]}-01`, monthEnd(months.at(-1)));
+});
+
+// ---- Step 2: read the range ----
+function parseFile(file, onRows) {
+  return new Promise((resolve, reject) => {
+    let first = true;
+    Papa.parse(file, {
+      skipEmptyLines: true,
+      chunk: r => {
+        let rows = r.data;
+        if (first) { onRows(null, rows[0]); rows = rows.slice(1); first = false; }
+        onRows(rows);
+      },
+      complete: resolve, error: reject
+    });
+  });
+}
+
+$('show').addEventListener('click', async () => {
+  const a = $('from').value, b = $('to').value;
+  if (!a || !b) return setStatus('Choose both a start and an end date.', 'err');
+  if (a > b) return setStatus('The start date is after the end date.', 'err');
+  const need = months.filter(m => `${m}-01` <= b && monthEnd(m) >= a).reverse(); // newest first
+  if (!need.length) return setStatus('No data covers that range yet. Run the Sync DN data workflow to fetch newer months.', 'err');
+
+  $('show').disabled = true; $('dl').disabled = true;
+  const r = { a, b, header: null, rows: 0, dns: new Set(), proj: new Set(), qty: 0, amt: 0,
+              byMonth: [], preview: [], parts: [] };
+  let idx = null;
+  try {
+    for (let i = 0; i < need.length; i++) {
+      const m = need[i];
+      const full = `${m}-01` >= a && monthEnd(m) <= b;
+      const keep = [];
+      const ms = { m, rows: 0, amt: 0 };
+      setStatus(`Loading ${monthLabel(m)} (${i+1} of ${need.length})…`);
+      const file = await getMonth(m);
+      await parseFile(file, (rows, header) => {
+        if (header) {
+          header[0] = header[0].replace(/^\uFEFF/, '');
+          if (!r.header) {
+            r.header = header;
+            const f = n => header.findIndex(h => h.trim().toLowerCase() === n);
+            idx = { date: f('posting_date'), dn: f('dn_no'), proj: f('project'), qty: f('qty'), amt: f('amount') };
+            if (idx.date < 0) throw new Error('The files have no posting_date column. Re-run the Sync DN data workflow with full re-export.');
+          }
+          return;
+        }
+        for (const row of rows) {
+          if (!full) { const d = dateKey(row[idx.date]); if (d < a || d > b) continue; keep.push(row); }
+          r.rows++; ms.rows++;
+          r.dns.add(row[idx.dn]); r.proj.add(row[idx.proj]);
+          r.qty += num(row[idx.qty]);
+          const v = num(row[idx.amt]); r.amt += v; ms.amt += v;
+          if (r.preview.length < PREVIEW_ROWS) r.preview.push(row);
+        }
+      });
+      r.byMonth.push(ms);
+      r.parts.push(full ? { file } : { rows: keep });
+    }
+    result = r;
+    render(r);
+    const excel = r.rows > EXCEL_MAX ? ' Note: this is more rows than Excel can open in one sheet.' : '';
+    setStatus(`${fmt.format(r.rows)} rows ready to download.${excel}`, 'ok');
+    $('dl').disabled = r.rows === 0;
+  } catch (err) {
+    setStatus(err.message || 'Could not read the files.', 'err');
+  } finally { $('show').disabled = false; }
+});
+
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function render(r) {
+  $('results').classList.remove('hidden');
+  $('sRows').textContent = fmt.format(r.rows);
+  $('sDns').textContent = fmt.format(r.dns.size);
+  $('sProj').textContent = fmt.format(r.proj.size);
+  $('sQty').textContent = fmt.format(r.qty);
+  $('sAmt').textContent = fmt.format(r.amt);
+  $('monthTbl').innerHTML = '<tr><th>Month</th><th style="text-align:right">Rows</th><th style="text-align:right">Amount (₹)</th></tr>' +
+    r.byMonth.map(x => `<tr><td>${monthLabel(x.m)}</td><td class="n">${fmt.format(x.rows)}</td><td class="n">${fmt.format(x.amt)}</td></tr>`).join('');
+  const numCols = new Set(['qty','rate','amount','docstatus']);
+  const h = r.header || [];
+  $('prevTbl').innerHTML = '<tr>' + h.map(c => `<th>${esc(c)}</th>`).join('') + '</tr>' +
+    r.preview.map(row => '<tr>' + row.map((c, i) => {
+      const n = numCols.has(h[i]?.toLowerCase());
+      return `<td${n ? ' class="n"' : ''}>${esc(n && c !== '' ? fmt2.format(num(c)) : c)}</td>`;
+    }).join('') + '</tr>').join('');
+  $('prevNote').textContent = r.rows > PREVIEW_ROWS
+    ? `Showing the latest ${PREVIEW_ROWS} of ${fmt.format(r.rows)} rows. The download has all of them.`
+    : `Showing all ${fmt.format(r.rows)} rows.`;
+}
+
+// ---- Download ----
+async function headerOffset(file) {
+  const buf = new Uint8Array(await file.slice(0, 1 << 20).arrayBuffer());
+  const i = buf.indexOf(10);
+  return i < 0 ? file.size : i + 1;
+}
+async function endsWithNewline(file) {
+  if (!file.size) return true;
+  const b = new Uint8Array(await file.slice(-1).arrayBuffer());
+  return b[0] === 10;
+}
+
+$('dl').addEventListener('click', async () => {
+  if (!result) return;
+  $('dl').disabled = true; setStatus('Preparing download…');
+  const blobParts = ['\uFEFF' + Papa.unparse([result.header]) + '\n'];
+  for (const p of result.parts) {
+    if (p.file) {
+      blobParts.push(p.file.slice(await headerOffset(p.file)));   // whole month, copied as-is
+      if (!(await endsWithNewline(p.file))) blobParts.push('\n');
+    } else if (p.rows.length) {
+      blobParts.push(Papa.unparse(p.rows) + '\n');
+    }
+  }
+  const url = URL.createObjectURL(new Blob(blobParts, { type: 'text/csv' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = `DN_${result.a}_to_${result.b}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  setStatus(`Downloaded DN_${result.a}_to_${result.b}.csv (${fmt.format(result.rows)} rows).`, 'ok');
+  $('dl').disabled = false;
+});
+</script>
+</body>
+</html>
