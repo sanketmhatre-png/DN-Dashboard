@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Delivery Notes | SolarSquare</title>
+<title>Procurement Dashboard | SolarSquare</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚚</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -35,7 +35,7 @@ body{color:var(--ink);font:14px/1.45 var(--sans);font-variant-numeric:tabular-nu
   background-attachment:fixed}
 button{font:inherit;color:inherit;cursor:pointer}
 :focus-visible{outline:2px solid var(--c7);outline-offset:2px;border-radius:6px}
-.wrap{max-width:1360px;margin:0 auto;padding:0 28px}
+.wrap{max-width:none;margin:0 auto;padding:0 clamp(16px,2.4vw,44px)}
 
 /* Brand strip */
 .rainbow{height:4px;background:linear-gradient(90deg,var(--c1),var(--c7) 22%,var(--c3) 44%,var(--c6) 66%,var(--c2) 84%,var(--c4));box-shadow:0 0 22px rgba(79,140,255,.55)}
@@ -142,25 +142,25 @@ h2 .dot{display:inline-block;width:12px;height:12px;border-radius:4px;margin-rig
 .prog{height:4px;background:var(--well);border-radius:2px;overflow:hidden;margin-bottom:8px;visibility:hidden;box-shadow:var(--sunk)}
 .prog.on{visibility:visible}
 .prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--c1),var(--c3),var(--c6));box-shadow:0 0 10px var(--c3);transition:width .2s}
-.tbl-wrap{height:min(620px,70vh);overflow:auto;border:1px solid var(--line-soft);border-radius:12px;background:#0C1420;box-shadow:var(--sunk)}
-table{border-collapse:separate;border-spacing:0;table-layout:fixed;font-family:var(--cond);font-size:13.5px}
-th,td{padding:0 12px;height:34px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-bottom:1px solid var(--line-soft);text-align:left}
+.tbl-wrap{height:max(420px,calc(100vh - 230px));overflow-y:auto;overflow-x:hidden;border:1px solid var(--line-soft);border-radius:12px;background:#0C1420;box-shadow:var(--sunk)}
+table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;font-family:var(--cond);font-size:13.5px}
+th,td{padding:0 10px;height:34px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-bottom:1px solid var(--line-soft);text-align:left}
 th{position:sticky;top:0;z-index:2;background:linear-gradient(180deg,#1C2840,#152036);font-family:var(--sans);font-size:12.5px;font-weight:600;color:#B8C6DA;border-bottom:1px solid rgba(79,140,255,.35);user-select:none;box-shadow:0 6px 12px -8px rgba(0,0,0,.8)}
 th.sortable{cursor:pointer}
 th.sortable:hover{color:#fff}
 th .arr{color:var(--c6);margin-left:4px}
 td.n,th.n{text-align:right}
-td:first-child{position:sticky;left:0;z-index:1;background:#0C1420;border-right:1px solid var(--line)}
-th:first-child{position:sticky;left:0;z-index:3;border-right:1px solid var(--line)}
 td.dn{color:#7FAAFF;cursor:pointer;font-weight:500}
 td.dn:hover{text-decoration:underline;color:#A9C4FF}
-.pill{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;padding:2px 9px;border-radius:999px;font-size:12.5px;font-weight:500;background:color-mix(in srgb,var(--k) 20%,transparent);color:color-mix(in srgb,var(--k) 70%,#fff);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 0 10px -3px color-mix(in srgb,var(--k) 60%,transparent)}
 td.amt{font-weight:600;color:#fff}
 tbody tr:hover td{background:#122036}
 .tbl-empty{padding:40px;text-align:center;color:var(--muted);font-family:var(--sans)}
 footer{color:var(--faint);font-size:12.5px;padding:0 0 40px}
 #msg{padding:80px 0;text-align:center;color:var(--muted)}
 
+@media (min-width:2300px){
+  .grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
 @media (max-width:1080px){
   .kpis{grid-template-columns:1fr 1fr}
   .grid{grid-template-columns:1fr}
@@ -180,7 +180,7 @@ footer{color:var(--faint);font-size:12.5px;padding:0 0 40px}
 <header class="top wrap">
   <div class="title-row">
     <div>
-      <h1>Delivery notes</h1>
+      <h1>Procurement Dashboard</h1>
       <div class="fresh" id="fresh">Loading…</div>
     </div>
     <button class="ghost" id="copyLink" title="Copy a link to this exact view">Copy link to this view</button>
@@ -296,7 +296,6 @@ const norm = (v, empty) => (v || '').split(/\s+/).filter(Boolean).join(' ') || e
 
 // ---------- State ----------
 let S, M, manifest;
-const catIndex = new Map();
 const st = {range: [0, 0], metric: 'amount', F: {warehouse: new Set(), category: new Set(), group: new Set(), state: new Set()}, q: '', expanded: {}};
 
 function readHash() {
@@ -439,7 +438,27 @@ function renderLists() {
 }
 
 // ---------- Raw line items ----------
-const COLS = {DN_NO:['DN no.',170], posting_date:['Date',108], Project:['Project',150], workflow_state:['Workflow',100], source_warehouse:['From warehouse',190], target_warehouse:['To warehouse',160], item_category:['Category',150], item_subcategory:['Subcategory',170], item_code:['Item code',190], item_name:['Item name',340], qty:['Qty',80], uohm:['UOM',70], rate:['Rate',100], amount:['Amount',120], 'Delivery Note Status':['DN status',120], docstatus:['Doc status',90]};
+// Columns: [label, minimum width px, share of spare width, priority]. The table always fits the
+// screen: on narrow screens the lowest-priority columns are hidden (they stay in the CSV download).
+const COLS = {DN_NO:['DN no.',150,1,10], posting_date:['Date',100,0,8], Project:['Project',118,1,9],
+  source_warehouse:['From warehouse',150,1.5,5], item_category:['Category',115,1,6], item_subcategory:['Subcategory',115,1,2],
+  item_code:['Item code',125,1.2,4], item_name:['Item name',210,4,10], qty:['Qty',56,0,7], uohm:['UOM',60,0,1],
+  rate:['Rate',100,.3,6], amount:['Amount',110,.4,10], 'Delivery Note Status':['DN status',84,.3,3]};
+// Shown in the CSV download but not on screen (always the same value, or usually empty)
+const HIDE = new Set(['workflow_state', 'target_warehouse', 'docstatus']);
+const colSpec = h => COLS[h] || [h, 110, 1, 0];
+function computeLayout() {
+  const W = $('#tblWrap').clientWidth - 2;
+  let vis = raw.header.map((h, i) => i).filter(i => !HIDE.has(raw.header[i]));
+  const minSum = () => vis.reduce((s, i) => s + colSpec(raw.header[i])[1], 0);
+  while (minSum() > W && vis.length > 4) {
+    const drop = vis.reduce((lo, i) => colSpec(raw.header[i])[3] < colSpec(raw.header[lo])[3] ? i : lo, vis[0]);
+    vis = vis.filter(i => i !== drop);
+  }
+  const spare = Math.max(0, W - minSum()), wsum = vis.reduce((s, i) => s + colSpec(raw.header[i])[2], 0) || 1;
+  raw.layout = {vis, widths: vis.map(i => { const c = colSpec(raw.header[i]); return Math.floor(c[1] + spare * c[2] / wsum); }), W};
+}
+const visCols = () => (raw.layout || computeLayout() || raw.layout).vis;
 const NUMC = new Set(['qty','rate','amount','docstatus']);
 const raw = {header: null, idx: null, rows: [], matched: 0, done: false, token: 0, sort: null, view: null};
 const blobCache = new Map();
@@ -545,12 +564,13 @@ function renderRawStat(total, loading) {
 function buildHead() {
   if (!raw.header) return;
   const sortable = raw.done && raw.rows.length === (st.q.trim() ? raw.matched : totals(...st.range).lines);
-  $('#tbl colgroup').innerHTML = raw.header.map(h => `<col style="width:${(COLS[h] || [h, 140])[1]}px">`).join('');
-  $('#tbl thead').innerHTML = '<tr>' + raw.header.map((h, i) => {
+  computeLayout();
+  const vis = raw.layout.vis;
+  $('#tbl colgroup').innerHTML = raw.layout.widths.map(w => `<col style="width:${w}px">`).join('');
+  $('#tbl thead').innerHTML = '<tr>' + vis.map(i => { const h = raw.header[i];
     const arr = raw.sort && raw.sort.i === i ? `<span class="arr">${raw.sort.dir > 0 ? '↑' : '↓'}</span>` : '';
-    return `<th class="${NUMC.has(h) ? 'n ' : ''}${sortable ? 'sortable' : ''}" data-i="${i}" ${sortable ? '' : 'title="Sorting is available once every matching row is loaded"'}>${esc((COLS[h] || [h])[0])}${arr}</th>`;
+    return `<th class="${NUMC.has(h) ? 'n ' : ''}${sortable ? 'sortable' : ''}" data-i="${i}" ${sortable ? '' : 'title="Sorting is available once every matching row is loaded"'}>${esc(colSpec(h)[0])}${arr}</th>`;
   }).join('') + '</tr>';
-  $('#tbl').style.width = raw.header.reduce((s, h) => s + (COLS[h] || [h, 140])[1], 0) + 'px';
   if (sortable) $('#tbl thead').querySelectorAll('th').forEach(th => th.onclick = () => sortBy(+th.dataset.i));
 }
 function sortBy(i) {
@@ -567,18 +587,17 @@ let paintQueued = false;
 function renderBody() {
   const wrap = $('#tblWrap'), tb = $('#tbl tbody'), rows = raw.view || raw.rows;
   if (!raw.header) { tb.innerHTML = ''; return; }
-  if (!rows.length) { tb.innerHTML = `<tr><td colspan="${raw.header.length}" class="tbl-empty">${raw.done ? 'No line items to show.' : 'Loading…'}</td></tr>`; return; }
+  if (!rows.length) { tb.innerHTML = `<tr><td colspan="${visCols().length}" class="tbl-empty">${raw.done ? 'No line items to show.' : 'Loading…'}</td></tr>`; return; }
   const start = Math.max(0, Math.floor(wrap.scrollTop / RH) - 10);
   const count = Math.ceil(wrap.clientHeight / RH) + 20, end = Math.min(rows.length, start + count);
   let h = `<tr style="height:${start * RH}px"></tr>`;
-  const H = raw.header;
+  const H = raw.header, vis = visCols();
   for (let r = start; r < end; r++) {
     const row = rows[r];
-    h += '<tr>' + H.map((c, i) => {
+    h += '<tr>' + vis.map(i => { const c = H[i];
       const v = row[i] ?? '';
-      if (i === 0) return `<td class="dn" data-dn="${esc(v)}">${esc(v)}</td>`;
+      if (c === 'DN_NO') return `<td class="dn" data-dn="${esc(v)}">${esc(v)}</td>`;
       if (c === 'posting_date') return `<td>${fmtDate(v)}</td>`;
-      if (c === 'item_category') { const ci = catIndex.get(norm(v, 'Uncategorised')); return `<td title="${esc(v)}"><span class="pill" style="--k:${ci == null ? 'var(--c10)' : colorFor('category', ci)}">${esc(v)}</span></td>`; }
       if (c === 'amount') return `<td class="n amt">${v === '' ? '' : nf2.format(parseFloat(String(v).replace(/,/g, '')) || 0)}</td>`;
       if (NUMC.has(c)) return `<td class="n">${v === '' ? '' : (c === 'docstatus' ? esc(v) : nf2.format(parseFloat(String(v).replace(/,/g, '')) || 0))}</td>`;
       return `<td title="${esc(v)}">${esc(v)}</td>`;
@@ -643,6 +662,7 @@ function setupRange() {
   const onChange = () => { let a = +$('#fromM').value, b = +$('#toM').value; if (a > b) [a, b] = [b, a]; st.range = [a, b]; update(); };
   $('#fromM').addEventListener('change', onChange); $('#toM').addEventListener('change', onChange);
 }
+let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (raw.header) { buildHead(); renderBody(); } }, 150); });
 $('#copyLink').addEventListener('click', async () => {
   try { await navigator.clipboard.writeText(location.href); $('#copyLink').textContent = 'Link copied'; } catch (e) { prompt('Copy this link:', location.href); }
   setTimeout(() => $('#copyLink').textContent = 'Copy link to this view', 2000);
@@ -656,7 +676,6 @@ $('#copyLink').addEventListener('click', async () => {
       fetch('dn/summary.json' + bust, {cache: 'no-store'}).then(r => { if (!r.ok) throw new Error('summary'); return r.json(); })
     ]);
     manifest = m; S = s; M = S.months;
-    S.dims.category.forEach((n, i) => catIndex.set(n, i));
   } catch (e) {
     $('#msg').innerHTML = e.message === 'summary'
       ? 'The dashboard summary hasn\'t been built yet. Go to <b>Actions → Sync DN data → Run workflow</b>, wait for it to finish, then reload this page.'
