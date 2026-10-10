@@ -3,350 +3,673 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>DN data – date range export</title>
+<title>Delivery Notes | SolarSquare</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚚</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <style>
 :root{
-  --ink:#1C2B39; --muted:#5B6B79; --bg:#EEF2F5; --panel:#FFFFFF; --line:#D5DDE3;
-  --sun:#E8A317; --sun-soft:#FBEBC4; --sun-text:#8A5E00; --bar:#B9C6D1; --ok:#1F7A6D; --err:#B3261E;
+  --bg:#070C16; --ink:#E8EEF7; --muted:#9AA8BC; --faint:#66748A;
+  --line:rgba(255,255,255,.08); --line-soft:rgba(255,255,255,.05);
+  --well:#0A111C; --sun:#F5C534; --up:#3DDC97; --down:#FF6B6B;
+  --c1:#4F8CFF; --c2:#FF9F43; --c3:#22D3A6; --c4:#FF5C7A; --c5:#A78BFA;
+  --c6:#FACC15; --c7:#38BDF8; --c8:#F472B6; --c9:#84CC16; --c10:#94A3B8;
+  --card:linear-gradient(160deg,#1B2639 0%,#111A28 100%);
+  --raise:0 1px 0 rgba(255,255,255,.07) inset,0 -1px 0 rgba(0,0,0,.45) inset,0 22px 40px -16px rgba(0,0,0,.8),0 8px 16px -8px rgba(0,0,0,.6);
+  --raise-hi:0 1px 0 rgba(255,255,255,.09) inset,0 -1px 0 rgba(0,0,0,.45) inset,0 30px 50px -18px rgba(0,0,0,.85),0 10px 20px -8px rgba(0,0,0,.65);
+  --sunk:inset 0 2px 5px rgba(0,0,0,.7),inset 0 -1px 0 rgba(255,255,255,.04);
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --cond:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  color-scheme:dark;
   box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
 }
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --ink:#E4EAF0; --muted:#97A6B3; --bg:#121A22; --panel:#1A2530; --line:#2C3A47;
-    --sun:#F2B533; --sun-soft:#3A2F14; --sun-text:#F2C25A; --bar:#3D5062; --ok:#4FBFAE; --err:#F08A80;
-  }
-}
 *,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:calc(env(safe-area-inset-top,0px) + 70px);background:var(--bg)}
 html,body{margin:0}
-body{background:var(--bg);color:var(--ink);font:15px/1.5 "Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;font-variant-numeric:tabular-nums}
-.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 48px}
-h1{font-size:26px;font-weight:700;margin:0 0 4px;letter-spacing:-.01em}
-.sub{color:var(--muted);margin:0 0 24px}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:16px}
-.step{display:flex;gap:14px;align-items:flex-start}
-.num{flex:none;width:28px;height:28px;border-radius:50%;background:var(--sun-soft);color:var(--sun-text);font-weight:700;display:grid;place-items:center;font-size:14px}
-.step h2{font-size:16px;margin:2px 0 8px;font-weight:600}
-.step .body{flex:1;min-width:0}
-.hint{color:var(--muted);font-size:13.5px;margin:6px 0 0}
-button,.filebtn{font:inherit;font-weight:600;border-radius:7px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 14px;cursor:pointer}
-button:hover,.filebtn:hover{border-color:var(--muted)}
-button:focus-visible,.filebtn:focus-within,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
-button.primary{background:var(--sun);border-color:var(--sun);color:#1C2B39}
-button.primary:hover{filter:brightness(.95)}
-button:disabled{opacity:.45;cursor:not-allowed}
-.filebtn input{position:absolute;opacity:0;width:1px;height:1px}
-.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-label.d{display:flex;flex-direction:column;font-size:13px;color:var(--muted);gap:4px}
-input[type=date]{font:inherit;padding:7px 10px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--ink)}
-.quick button{padding:6px 11px;font-weight:500;font-size:14px}
-.strip{display:flex;align-items:flex-end;gap:3px;height:96px;margin:18px 0 4px;overflow-x:auto;padding-bottom:2px}
-.m{flex:1 0 26px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;background:none;border:none;padding:0;height:100%;justify-content:flex-end;border-radius:4px}
-.m span.b{width:100%;background:var(--bar);border-radius:3px 3px 0 0;min-height:4px}
-.m.sel span.b{background:var(--sun)}
-.m small{font-size:11px;color:var(--muted);line-height:1}
-.m.sel small{color:var(--sun-text);font-weight:700}
-.yr{font-size:12px;color:var(--muted);display:flex;justify-content:space-between}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:16px}
-.stat{background:var(--panel);padding:14px 16px}
-.stat b{display:block;font-size:22px;font-weight:700}
-.stat span{color:var(--muted);font-size:13px}
-.status{font-size:14px;margin-top:10px;min-height:21px}
-.status.err{color:var(--err)} .status.ok{color:var(--ok)}
-.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:8px;max-height:520px;overflow-y:auto}
-table{border-collapse:collapse;width:100%;font-size:13px}
-th,td{padding:6px 10px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:left}
-th{position:sticky;top:0;background:var(--panel);font-weight:600;z-index:1}
-td.n{text-align:right}
-.split{display:grid;grid-template-columns:280px 1fr;gap:16px}
-@media (max-width:820px){.split{grid-template-columns:1fr}}
-.hidden{display:none}
+body{color:var(--ink);font:14px/1.45 var(--sans);font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased;min-height:100%;
+  background:radial-gradient(1100px 620px at 8% -12%,rgba(79,140,255,.20),transparent 60%),
+             radial-gradient(900px 520px at 100% 0%,rgba(167,139,250,.15),transparent 60%),
+             radial-gradient(900px 700px at 50% 115%,rgba(34,211,166,.10),transparent 60%),var(--bg);
+  background-attachment:fixed}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--c7);outline-offset:2px;border-radius:6px}
+.wrap{max-width:1360px;margin:0 auto;padding:0 28px}
+
+/* Brand strip */
+.rainbow{height:4px;background:linear-gradient(90deg,var(--c1),var(--c7) 22%,var(--c3) 44%,var(--c6) 66%,var(--c2) 84%,var(--c4));box-shadow:0 0 22px rgba(79,140,255,.55)}
+
+/* Header */
+header.top{padding-top:30px;padding-bottom:20px}
+.title-row{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+h1{font-size:32px;font-weight:700;letter-spacing:-.02em;margin:0;line-height:1.1;background:linear-gradient(90deg,#FFFFFF,#A9C4FF 60%,#C4B5FD);-webkit-background-clip:text;background-clip:text;color:transparent}
+.fresh{color:var(--muted);margin-top:8px}
+.fresh b{color:var(--ink);font-weight:500}
+.ghost{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 14px;font-weight:500;color:var(--ink);box-shadow:var(--raise);transition:transform .15s,box-shadow .15s}
+.ghost:hover{transform:translateY(-1px);box-shadow:var(--raise-hi)}
+.ghost:active{transform:translateY(1px);box-shadow:var(--sunk)}
+
+/* Filter bar */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:rgba(9,14,25,.72);backdrop-filter:blur(14px) saturate(140%);-webkit-backdrop-filter:blur(14px) saturate(140%);border-bottom:1px solid var(--line);box-shadow:0 10px 30px -18px rgba(0,0,0,.9)}
+.bar .wrap{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding-top:12px;padding-bottom:12px}
+.seg{display:inline-flex;background:var(--well);border:1px solid var(--line-soft);border-radius:11px;padding:3px;box-shadow:var(--sunk)}
+.seg button{border:0;background:none;padding:6px 12px;border-radius:8px;font-weight:500;color:var(--muted);white-space:nowrap;transition:color .15s,background .15s,box-shadow .15s}
+.seg button:hover{color:var(--ink)}
+.seg button[aria-pressed="true"]{color:#fff;background:linear-gradient(180deg,#6A9DFF,#3D74EA);box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 6px 14px -4px rgba(79,140,255,.7)}
+.range{display:inline-flex;align-items:center;gap:8px;color:var(--muted)}
+.range select{font:inherit;color:var(--ink);background:var(--well);border:1px solid var(--line-soft);border-radius:9px;padding:6px 28px 6px 10px;box-shadow:var(--sunk);appearance:none;-webkit-appearance:none;
+  background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 15px) 52%,calc(100% - 10px) 52%;background-size:5px 5px;background-repeat:no-repeat}
+.range select option{background:#111A28}
+.chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.chip{--k:var(--sun);display:inline-flex;align-items:center;gap:6px;background:color-mix(in srgb,var(--k) 18%,#0F1724);color:var(--ink);border:1px solid color-mix(in srgb,var(--k) 55%,transparent);border-radius:999px;padding:3px 6px 3px 10px;font-size:13px;box-shadow:0 0 14px -2px color-mix(in srgb,var(--k) 45%,transparent)}
+.chip span{color:var(--muted)}
+.chip button{border:0;background:none;width:18px;height:18px;border-radius:50%;line-height:1;padding:0;color:var(--muted)}
+.chip button:hover{background:color-mix(in srgb,var(--k) 35%,transparent);color:#fff}
+.linkbtn{border:0;background:none;color:var(--muted);text-decoration:underline;text-underline-offset:3px;padding:2px 4px}
+.linkbtn:hover{color:var(--ink)}
+.spacer{flex:1}
+
+/* KPI cards (3D) */
+.kpis{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:18px;margin:26px 0 26px;perspective:900px}
+.kpi{--k:var(--c1);--rx:0deg;--ry:0deg;position:relative;padding:22px 22px 20px;border-radius:18px;min-width:0;border:1px solid color-mix(in srgb,var(--k) 30%,rgba(255,255,255,.06));
+  background:radial-gradient(120% 90% at 0% 0%,color-mix(in srgb,var(--k) 28%,transparent),transparent 60%),linear-gradient(160deg,#1C283C,#101826);
+  box-shadow:0 1px 0 rgba(255,255,255,.10) inset,0 -2px 0 rgba(0,0,0,.45) inset,0 26px 44px -18px rgba(0,0,0,.85),0 16px 34px -16px color-mix(in srgb,var(--k) 55%,transparent);
+  transform:rotateX(var(--rx)) rotateY(var(--ry)) translateZ(0);transform-style:preserve-3d;transition:transform .18s ease,box-shadow .2s}
+.kpi::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(115deg,rgba(255,255,255,.10),rgba(255,255,255,0) 35%)}
+.kpi:hover{box-shadow:0 1px 0 rgba(255,255,255,.12) inset,0 -2px 0 rgba(0,0,0,.45) inset,0 34px 54px -18px rgba(0,0,0,.9),0 20px 44px -14px color-mix(in srgb,var(--k) 70%,transparent)}
+.kpi .lbl{color:var(--muted);font-weight:500;transform:translateZ(10px)}
+.kpi .lbl::before{content:"";display:inline-block;width:10px;height:10px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff,var(--k) 45%,color-mix(in srgb,var(--k) 60%,#000));margin-right:8px;vertical-align:0;box-shadow:0 0 10px var(--k)}
+.kpi .val{font-size:30px;font-weight:700;letter-spacing:-.02em;margin-top:8px;line-height:1.1;white-space:nowrap;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.45),0 0 26px color-mix(in srgb,var(--k) 55%,transparent);transform:translateZ(18px)}
+.kpi:first-child .val{font-size:48px}
+.kpi .val small{font-size:.48em;font-weight:500;color:var(--muted);margin-left:5px;letter-spacing:0;text-shadow:none}
+.delta{margin-top:10px;font-size:13px;color:var(--muted);transform:translateZ(12px)}
+.delta b{font-weight:600}
+.delta .up{color:var(--up);text-shadow:0 0 12px rgba(61,220,151,.45)} .delta .down{color:var(--down);text-shadow:0 0 12px rgba(255,107,107,.45)}
+
+/* Panels (3D) */
+.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px 22px;box-shadow:var(--raise);transition:transform .2s ease,box-shadow .2s ease;position:relative}
+.panel::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,0) 30%)}
+.grid .panel:hover{transform:translateY(-3px);box-shadow:var(--raise-hi)}
+.ph{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap;position:relative}
+h2{font-size:16px;font-weight:600;margin:0}
+h2 .dot{display:inline-block;width:12px;height:12px;border-radius:4px;margin-right:9px;vertical-align:-1px;box-shadow:0 0 12px currentColor,0 1px 0 rgba(255,255,255,.4) inset}
+.hint{color:var(--faint);font-size:12.5px}
+.sec-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 14px}
+.sec-head h2{font-size:18px}
+
+/* 3D share tube */
+.share{position:relative;display:flex;height:16px;border-radius:8px;overflow:hidden;margin:0 0 16px;background:var(--well);box-shadow:var(--sunk)}
+.share span{display:block;height:100%;transition:width .3s ease,opacity .2s}
+.share span+span{box-shadow:-1px 0 0 rgba(0,0,0,.55)}
+.share::after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;background:linear-gradient(180deg,rgba(255,255,255,.45) 0%,rgba(255,255,255,.08) 38%,rgba(0,0,0,0) 55%,rgba(0,0,0,.38) 100%)}
+
+/* Breakdown lists with 3D bars */
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin:0 0 26px}
+.list{display:flex;flex-direction:column;position:relative}
+.li{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(60px,1fr) 80px 46px;align-items:center;gap:12px;border:0;background:none;text-align:left;padding:7px 10px;margin:0 -10px;border-radius:10px;position:relative;transition:background .15s,transform .15s}
+.li:hover{background:rgba(255,255,255,.04);transform:translateX(2px)}
+.li .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li .nm::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff,var(--k) 45%,color-mix(in srgb,var(--k) 60%,#000));margin-right:9px;vertical-align:0;box-shadow:0 0 8px color-mix(in srgb,var(--k) 70%,transparent)}
+.li .trk{display:block;height:12px;background:var(--well);border-radius:6px;overflow:hidden;box-shadow:var(--sunk)}
+.li .fill{display:block;height:100%;border-radius:6px;transition:width .3s ease;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--k) 45%,#fff) 0%,var(--k) 42%,color-mix(in srgb,var(--k) 65%,#000) 100%);
+  box-shadow:0 0 12px color-mix(in srgb,var(--k) 50%,transparent),inset 0 1px 0 rgba(255,255,255,.4)}
+.li .v{text-align:right;font-weight:600}
+.li .sh{text-align:right;color:var(--faint);font-size:12.5px}
+.list.has-sel .li:not(.sel){color:var(--faint)}
+.list.has-sel .li:not(.sel) .fill,.list.has-sel .li:not(.sel) .nm::before{opacity:.28;box-shadow:none}
+.li.sel{font-weight:600;background:linear-gradient(90deg,color-mix(in srgb,var(--k) 22%,transparent),transparent);box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+.li.sel::before{content:"";position:absolute;left:-2px;top:7px;bottom:7px;width:3px;border-radius:2px;background:var(--k);box-shadow:0 0 10px var(--k)}
+.more{border:0;background:none;color:var(--muted);padding:10px 0 0;text-align:left;font-weight:500}
+.more:hover{color:var(--ink)}
+.empty{color:var(--faint);padding:10px 0}
+
+/* Raw table */
+.raw{margin-bottom:40px}
+.raw-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.search{position:relative}
+.search input{font:inherit;width:320px;max-width:70vw;padding:9px 12px 9px 34px;border:1px solid var(--line-soft);border-radius:10px;background:var(--well);color:var(--ink);box-shadow:var(--sunk)}
+.search input::placeholder{color:var(--faint)}
+.search input:focus{outline:2px solid var(--c1);outline-offset:0}
+.search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--faint)}
+.primary{border:0;color:#fff;border-radius:10px;padding:9px 16px;font-weight:600;background:linear-gradient(180deg,#6FA2FF 0%,#3E76EC 55%,#2F5FCC 100%);box-shadow:0 1px 0 rgba(255,255,255,.4) inset,0 -2px 0 rgba(0,0,0,.25) inset,0 10px 22px -8px rgba(79,140,255,.75);transition:transform .12s,box-shadow .12s}
+.primary:hover{transform:translateY(-1px);box-shadow:0 1px 0 rgba(255,255,255,.45) inset,0 -2px 0 rgba(0,0,0,.25) inset,0 14px 28px -8px rgba(79,140,255,.9)}
+.primary:active{transform:translateY(1px);box-shadow:inset 0 2px 6px rgba(0,0,0,.4)}
+.primary:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.rawstat{color:var(--muted);margin:10px 0 12px;min-height:20px}
+.rawstat b{color:var(--ink);font-weight:600}
+.prog{height:4px;background:var(--well);border-radius:2px;overflow:hidden;margin-bottom:8px;visibility:hidden;box-shadow:var(--sunk)}
+.prog.on{visibility:visible}
+.prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--c1),var(--c3),var(--c6));box-shadow:0 0 10px var(--c3);transition:width .2s}
+.tbl-wrap{height:min(620px,70vh);overflow:auto;border:1px solid var(--line-soft);border-radius:12px;background:#0C1420;box-shadow:var(--sunk)}
+table{border-collapse:separate;border-spacing:0;table-layout:fixed;font-family:var(--cond);font-size:13.5px}
+th,td{padding:0 12px;height:34px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-bottom:1px solid var(--line-soft);text-align:left}
+th{position:sticky;top:0;z-index:2;background:linear-gradient(180deg,#1C2840,#152036);font-family:var(--sans);font-size:12.5px;font-weight:600;color:#B8C6DA;border-bottom:1px solid rgba(79,140,255,.35);user-select:none;box-shadow:0 6px 12px -8px rgba(0,0,0,.8)}
+th.sortable{cursor:pointer}
+th.sortable:hover{color:#fff}
+th .arr{color:var(--c6);margin-left:4px}
+td.n,th.n{text-align:right}
+td:first-child{position:sticky;left:0;z-index:1;background:#0C1420;border-right:1px solid var(--line)}
+th:first-child{position:sticky;left:0;z-index:3;border-right:1px solid var(--line)}
+td.dn{color:#7FAAFF;cursor:pointer;font-weight:500}
+td.dn:hover{text-decoration:underline;color:#A9C4FF}
+.pill{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;padding:2px 9px;border-radius:999px;font-size:12.5px;font-weight:500;background:color-mix(in srgb,var(--k) 20%,transparent);color:color-mix(in srgb,var(--k) 70%,#fff);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 0 10px -3px color-mix(in srgb,var(--k) 60%,transparent)}
+td.amt{font-weight:600;color:#fff}
+tbody tr:hover td{background:#122036}
+.tbl-empty{padding:40px;text-align:center;color:var(--muted);font-family:var(--sans)}
+footer{color:var(--faint);font-size:12.5px;padding:0 0 40px}
+#msg{padding:80px 0;text-align:center;color:var(--muted)}
+
+@media (max-width:1080px){
+  .kpis{grid-template-columns:1fr 1fr}
+  .grid{grid-template-columns:1fr}
+}
+@media (max-width:560px){
+  .wrap{padding:0 16px}
+  .kpis{grid-template-columns:1fr}
+  .kpi:first-child .val{font-size:40px}
+  .li{grid-template-columns:minmax(0,1.4fr) minmax(40px,.8fr) 72px}
+  .li .sh{display:none}
+}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}.kpi{transform:none!important}}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>Delivery Note data</h1>
-  <p class="sub">Delivery Note line items from ERP, January 2025 onward. Pick a date range, check the numbers, and download those rows as one CSV.</p>
-
-  <p class="hint" id="folderInfo" style="margin:-14px 0 20px">Loading available months…</p>
-
-  <div class="panel step" id="rangePanel" style="opacity:.5;pointer-events:none">
-    <div class="num">1</div>
-    <div class="body">
-      <h2>Choose a date range</h2>
-      <div class="row">
-        <label class="d">From<input type="date" id="from"></label>
-        <label class="d">To<input type="date" id="to"></label>
-        <div class="row quick">
-          <button data-m="1">Last month</button>
-          <button data-m="2">Last 2 months</button>
-          <button data-m="5">Last 5 months</button>
-          <button data-y="1">This year</button>
-          <button data-all="1">Everything</button>
-        </div>
-      </div>
-      <div class="strip" id="strip" aria-label="Months available. Click one month, then another to select a range."></div>
-      <div class="yr" id="yr"></div>
-      <div class="row" style="margin-top:14px">
-        <span class="num" style="margin-right:2px">2</span><button class="primary" id="show">Show data</button>
-        <span class="num" style="margin:0 2px 0 8px">3</span><button id="dl" disabled>Download CSV</button>
-      </div>
-      <div class="status" id="status"></div>
+<div class="rainbow" aria-hidden="true"></div>
+<header class="top wrap">
+  <div class="title-row">
+    <div>
+      <h1>Delivery notes</h1>
+      <div class="fresh" id="fresh">Loading…</div>
     </div>
+    <button class="ghost" id="copyLink" title="Copy a link to this exact view">Copy link to this view</button>
   </div>
+</header>
 
-  <div id="results" class="hidden">
-    <div class="stats">
-      <div class="stat"><b id="sRows">–</b><span>Line items</span></div>
-      <div class="stat"><b id="sDns">–</b><span>Delivery notes</span></div>
-      <div class="stat"><b id="sProj">–</b><span>Projects</span></div>
-      <div class="stat"><b id="sQty">–</b><span>Total quantity</span></div>
-      <div class="stat"><b id="sAmt">–</b><span>Total amount (₹)</span></div>
+<div class="bar">
+  <div class="wrap">
+    <div class="seg" id="presets" role="group" aria-label="Period">
+      <button data-p="m1">This month</button>
+      <button data-p="m3">3 months</button>
+      <button data-p="m6">6 months</button>
+      <button data-p="m12">12 months</button>
+      <button data-p="fy">This FY</button>
+      <button data-p="all">All time</button>
     </div>
-    <div class="split">
-      <div class="panel" style="margin:0">
-        <h2 style="font-size:16px;margin:0 0 10px">By month</h2>
-        <div class="scroll" style="max-height:none"><table id="monthTbl"></table></div>
-      </div>
-      <div class="panel" style="margin:0;min-width:0">
-        <h2 style="font-size:16px;margin:0 0 4px">Preview</h2>
-        <p class="hint" style="margin:0 0 10px" id="prevNote"></p>
-        <div class="scroll"><table id="prevTbl"></table></div>
-      </div>
-    </div>
+    <span class="range"><select id="fromM" aria-label="From month"></select><span>to</span><select id="toM" aria-label="To month"></select></span>
+    <div class="chips" id="chips"></div>
+    <span class="spacer"></span>
   </div>
 </div>
 
+<main class="wrap" id="app" hidden>
+  <section class="kpis" id="kpis" aria-label="Headline numbers"></section>
+
+  <div class="sec-head">
+    <h2>Breakdown</h2>
+    <div class="seg" id="metric" role="group" aria-label="Measure">
+      <button data-m="amount">Value</button>
+      <button data-m="dns">Delivery notes</button>
+      <button data-m="lines">Line items</button>
+    </div>
+  </div>
+
+  <section class="grid">
+    <div class="panel"><div class="ph"><h2><span class="dot" style="background:var(--c1);color:var(--c1)"></span>By state</h2><span class="hint">From project ID</span></div><div class="share" data-share="state"></div><div class="list" data-dim="state"></div></div>
+    <div class="panel"><div class="ph"><h2><span class="dot" style="background:var(--c5);color:var(--c5)"></span>By customer group</h2><span class="hint">Click to filter</span></div><div class="share" data-share="group"></div><div class="list" data-dim="group"></div></div>
+    <div class="panel"><div class="ph"><h2><span class="dot" style="background:var(--c3);color:var(--c3)"></span>By item category</h2><span class="hint">Click to filter</span></div><div class="share" data-share="category"></div><div class="list" data-dim="category"></div></div>
+    <div class="panel"><div class="ph"><h2><span class="dot" style="background:var(--c2);color:var(--c2)"></span>By warehouse</h2><span class="hint">Dispatching warehouse</span></div><div class="share" data-share="warehouse"></div><div class="list" data-dim="warehouse"></div></div>
+  </section>
+
+  <section class="panel raw">
+    <div class="ph">
+      <div>
+        <h2>Line items</h2>
+        <div class="hint">Every delivery note line for the period and filters above. Click a DN number to see all its lines.</div>
+      </div>
+      <div class="raw-tools">
+        <label class="search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="q" type="search" placeholder="Search DN, project ID, item code or name" aria-label="Search line items">
+        </label>
+        <button class="primary" id="dl">Download CSV</button>
+      </div>
+    </div>
+    <div class="prog" id="prog"><i></i></div>
+    <div class="rawstat" id="rawstat"></div>
+    <div class="tbl-wrap" id="tblWrap"><table id="tbl"><colgroup></colgroup><thead></thead><tbody></tbody></table></div>
+  </section>
+
+  <footer>Values are delivery note amounts in ₹ for submitted delivery notes (cancelled DNs excluded), from ERP via Metabase question DN_S. Internal transfers are delivery notes to "Solarsquare Energy Pvt Ltd – Debtors".</footer>
+</main>
+<div id="msg" class="wrap">Loading dashboard…</div>
+
 <script>
-const $ = id => document.getElementById(id);
-const fmt = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 0});
-const fmt2 = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 2});
+'use strict';
+const $ = s => document.querySelector(s);
 const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const PREVIEW_ROWS = 300, EXCEL_MAX = 1048575;
+const DIMS = ['warehouse','category','group','state'];
+const CPOS = {warehouse:1, category:2, group:3, state:4};   // positions in summary.cube rows
+const DPOS = {warehouse:1, group:2, state:3};               // positions in summary.dn_cube rows
+const DIM_LABEL = {warehouse:'Warehouse', category:'Category', group:'Customer group', state:'State'};
+const CAP = 250000, RH = 34;
+const PAL = ['--c1','--c2','--c3','--c4','--c5','--c6','--c7','--c8','--c9','--c10'];
+const DIM_COLOR = {state:'--c1', group:'--c5', category:'--c3', warehouse:'--c2'};
+const POFF = {state:0, group:4, category:2, warehouse:1};
+const colorFor = (dim, i) => `var(${PAL[(i + POFF[dim]) % PAL.length]})`;
 
-let months = [];         // sorted ascending
-let result = null;       // last computed range
-let anchor = null;       // first click on month strip
-
-const pad = n => String(n).padStart(2, '0');
-const iso = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-const monthEnd = m => { const [y, mo] = m.split('-').map(Number); return iso(new Date(y, mo, 0)); };
-const monthLabel = m => { const [y, mo] = m.split('-'); return `${MON[+mo-1]} ${y}`; };
-
-// Dates may arrive as 2026-10-10, 2026-10-10T00:00:00Z or "October 10, 2026"
-const dateCache = new Map();
-function dateKey(v) {
+// ---------- Formatting ----------
+const nfI = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 0});
+const nf2 = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 2});
+function inr(v, parts) {
+  const a = Math.abs(v); let n, u;
+  if (a >= 1e7) { n = v / 1e7; u = 'Cr'; } else if (a >= 1e5) { n = v / 1e5; u = 'L'; } else { n = v; u = ''; }
+  const s = u ? n.toLocaleString('en-IN', {maximumFractionDigits: Math.abs(n) >= 100 ? 0 : 1}) : nfI.format(n);
+  return parts ? {n: '₹' + s, u} : `₹${s}${u ? ' ' + u : ''}`;
+}
+const fmtM = (m, metric) => metric === 'amount' ? inr(m) : nfI.format(m);
+const mLabel = k => { const [y, m] = k.split('-'); return `${MON[+m - 1]} ${y}`; };
+const rangeLabel = (a, b) => a === b ? mLabel(M[a]) : `${mLabel(M[a])} – ${mLabel(M[b])}`;
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function fmtDate(v) {
   if (!v) return '';
-  let k = dateCache.get(v);
-  if (k !== undefined) return k;
-  if (/^\d{4}-\d{2}-\d{2}/.test(v)) k = v.slice(0, 10);
-  else { const d = new Date(v); k = isNaN(d) ? '' : iso(d); }
-  if (dateCache.size < 5000) dateCache.set(v, k);
-  return k;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v);
+  return m ? `${+m[3]} ${MON[+m[2] - 1]} ${m[1]}` : v;
 }
-const num = v => { if (v == null || v === '') return 0; const n = parseFloat(String(v).replace(/,/g, '')); return isNaN(n) ? 0 : n; };
 
-function setStatus(msg, cls = '') { const s = $('status'); s.textContent = msg; s.className = 'status ' + cls; }
+// ---------- Customer rules (keep identical to customer_info() in sync_dn.py) ----------
+const STATES = {MH:'Maharashtra',UP:'Uttar Pradesh',MP:'Madhya Pradesh',TN:'Tamil Nadu',RJ:'Rajasthan',GJ:'Gujarat',DL:'Delhi',TL:'Telangana',TS:'Telangana',KA:'Karnataka',HR:'Haryana',AP:'Andhra Pradesh',CG:'Chhattisgarh',PB:'Punjab',WB:'West Bengal',KL:'Kerala',OR:'Odisha',OD:'Odisha',BR:'Bihar',UK:'Uttarakhand',JH:'Jharkhand',GA:'Goa',AS:'Assam'};
+const NO_STATE = 'Not state-coded';
+function customerInfo(c) {
+  c = (c || '').trim();
+  const m = /^(RSSE|SSE)([A-Z]{2})/.exec(c);
+  if (m) return [`${m[1]} projects`, STATES[m[2]] || m[2]];
+  const u = c.toUpperCase();
+  if (u.startsWith('SSHS')) return ['SSHS projects', NO_STATE];
+  if (u.startsWith('CCNI')) return ['CCNI projects', NO_STATE];
+  if (u.startsWith('SOLARSQUARE ENERGY')) return ['Internal transfers', NO_STATE];
+  if (c.endsWith(' Customer')) return ['Service customers', NO_STATE];
+  return ['Other customers', NO_STATE];
+}
+const norm = (v, empty) => (v || '').split(/\s+/).filter(Boolean).join(' ') || empty;
 
-// ---- Load the list of months from dn/manifest.json ----
-let manifest = null;
-async function loadManifest() {
+// ---------- State ----------
+let S, M, manifest;
+const catIndex = new Map();
+const st = {range: [0, 0], metric: 'amount', F: {warehouse: new Set(), category: new Set(), group: new Set(), state: new Set()}, q: '', expanded: {}};
+
+function readHash() {
   try {
-    const res = await fetch('dn/manifest.json?t=' + Date.now(), {cache: 'no-store'});
-    if (!res.ok) throw new Error(res.status);
-    manifest = await res.json();
-  } catch (e) {
-    $('folderInfo').textContent = 'Could not load dn/manifest.json. Run the "Sync DN data" workflow in the Actions tab, then reload this page.';
-    return;
+    const h = JSON.parse(decodeURIComponent(location.hash.slice(1)) || '{}');
+    if (h.r) { const a = M.indexOf(h.r[0]), b = M.indexOf(h.r[1]); if (a >= 0 && b >= a) st.range = [a, b]; }
+    if (h.m) st.metric = h.m;
+    for (const d of DIMS) if (h[d]) st.F[d] = new Set(h[d].map(n => S.dims[d].indexOf(n)).filter(i => i >= 0));
+    if (h.q) st.q = h.q;
+  } catch (e) {}
+}
+function writeHash() {
+  const h = {r: [M[st.range[0]], M[st.range[1]]], m: st.metric};
+  for (const d of DIMS) if (st.F[d].size) h[d] = [...st.F[d]].map(i => S.dims[d][i]);
+  if (st.q) h.q = st.q;
+  history.replaceState(null, '', '#' + encodeURIComponent(JSON.stringify(h)));
+}
+
+// ---------- Aggregation over the summary cube ----------
+const okC = (r, skip) => DIMS.every(d => d === skip || !st.F[d].size || st.F[d].has(r[CPOS[d]]));
+const okD = (r, skip) => ['warehouse','group','state'].every(d => d === skip || !st.F[d].size || st.F[d].has(r[DPOS[d]]));
+
+function totals(a, b) {
+  let amount = 0, lines = 0, catDns = 0, dns = 0;
+  for (const r of S.cube) if (r[0] >= a && r[0] <= b && okC(r)) { lines += r[5]; amount += r[6]; catDns += r[7]; }
+  if (st.F.category.size) dns = catDns;
+  else for (const r of S.dn_cube) if (r[0] >= a && r[0] <= b && okD(r)) dns += r[4];
+  return {amount, lines, dns};
+}
+function breakdown(dim, metric) {
+  const [a, b] = st.range, out = new Map();
+  if (metric === 'dns' && dim !== 'category' && !st.F.category.size) {
+    for (const r of S.dn_cube) if (r[0] >= a && r[0] <= b && okD(r, dim)) out.set(r[DPOS[dim]], (out.get(r[DPOS[dim]]) || 0) + r[4]);
+  } else {
+    const k = metric === 'amount' ? 6 : metric === 'lines' ? 5 : 7, p = CPOS[dim];
+    for (const r of S.cube) if (r[0] >= a && r[0] <= b && okC(r, dim)) out.set(r[p], (out.get(r[p]) || 0) + r[k]);
   }
-  months = Object.keys(manifest.months).sort();
-  if (!months.length) { $('folderInfo').textContent = 'No DN data yet. Run the "Sync DN data" workflow, then reload.'; return; }
-  const when = new Date(manifest.last_refresh).toLocaleString('en-IN', {dateStyle: 'medium', timeStyle: 'short'});
-  $('folderInfo').textContent = `${fmt.format(manifest.total_rows)} rows from ${monthLabel(months[0])} to ${monthLabel(months.at(-1))}. Last refreshed ${when}.`;
-  $('rangePanel').style.opacity = 1; $('rangePanel').style.pointerEvents = 'auto';
-  drawStrip(); quickRange(2);
+  const last = name => (dim === 'state' && S.dims.state[name] === NO_STATE) || (dim === 'group' && S.dims.group[name] === 'Other customers');
+  return [...out].filter(([, v]) => v !== 0).sort((x, y) => (last(x[0]) - last(y[0])) || (y[1] - x[1]));
 }
 
-// Download one month and unzip it in the browser
-const monthCache = new Map();
-async function getMonth(m) {
-  if (monthCache.has(m)) return monthCache.get(m);
-  const info = manifest.months[m];
-  const res = await fetch(`dn/${info.file}?v=${encodeURIComponent(manifest.last_refresh)}`);
-  if (!res.ok) throw new Error(`Could not download ${info.file} (${res.status}).`);
-  const blob = await new Response(res.body.pipeThrough(new DecompressionStream('gzip'))).blob();
-  monthCache.set(m, blob);
-  return blob;
+// ---------- Rendering: header, chips, KPIs ----------
+function renderHeader() {
+  const last = new Date(manifest.last_refresh);
+  $('#fresh').innerHTML = `${nfI.format(manifest.total_rows)} line items from ${fmtDate(S.first_date)} to <b>${fmtDate(S.last_date)}</b>. Refreshed ${last.toLocaleString('en-IN', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'})}.`;
+}
+function presetRanges() {
+  const n = M.length - 1, [y, m] = M[n].split('-').map(Number);
+  const fyStart = `${m >= 4 ? y : y - 1}-04`;
+  const fyIdx = Math.max(0, M.findIndex(k => k >= fyStart));
+  return {m1: [n, n], m3: [Math.max(0, n - 2), n], m6: [Math.max(0, n - 5), n], m12: [Math.max(0, n - 11), n], fy: [fyIdx, n], all: [0, n]};
+}
+function renderPresets() {
+  const pr = presetRanges();
+  document.querySelectorAll('#presets button').forEach(b => {
+    const r = pr[b.dataset.p];
+    b.setAttribute('aria-pressed', r[0] === st.range[0] && r[1] === st.range[1]);
+  });
+  $('#fromM').value = st.range[0]; $('#toM').value = st.range[1];
+  document.querySelectorAll('#metric button').forEach(b => b.setAttribute('aria-pressed', b.dataset.m === st.metric));
+}
+function isFullMonth(i) {
+  const [y, m] = M[i].split('-').map(Number);
+  const end = new Date(y, m, 0).getDate();
+  return S.last_date > `${M[i]}-${String(end).padStart(2, '0')}` || S.last_date === `${M[i]}-${String(end).padStart(2, '0')}`;
+}
+function renderChips() {
+  const el = $('#chips'); el.innerHTML = '';
+  let any = false;
+  for (const d of DIMS) for (const i of st.F[d]) {
+    any = true;
+    const c = document.createElement('span'); c.className = 'chip'; c.style.setProperty('--k', `var(${DIM_COLOR[d]})`);
+    c.innerHTML = `<span>${DIM_LABEL[d]}:</span> ${esc(S.dims[d][i])} <button aria-label="Remove ${esc(S.dims[d][i])} filter">×</button>`;
+    c.querySelector('button').onclick = () => { st.F[d].delete(i); update(); };
+    el.appendChild(c);
+  }
+  if (any) {
+    const b = document.createElement('button'); b.className = 'linkbtn'; b.textContent = 'Clear filters';
+    b.onclick = () => { DIMS.forEach(d => st.F[d].clear()); update(); };
+    el.appendChild(b);
+  }
+}
+function deltaHtml(cur, prev, label) {
+  if (prev == null) return `<div class="delta">${label}</div>`;
+  if (!prev) return `<div class="delta">No activity in ${label}</div>`;
+  const p = (cur - prev) / Math.abs(prev) * 100;
+  const cls = p >= 0 ? 'up' : 'down';
+  return `<div class="delta"><b class="${cls}">${p >= 0 ? '▲' : '▼'} ${Math.abs(p).toFixed(1)}%</b> vs ${label}</div>`;
+}
+function renderKpis() {
+  const [a, b] = st.range, len = b - a + 1;
+  const cur = totals(a, b);
+  let prev = null, plabel = `Since ${mLabel(M[a])}`;
+  if (a - len >= 0) { prev = totals(a - len, a - 1); plabel = rangeLabel(a - len, a - 1); }
+  const avg = cur.dns ? cur.amount / cur.dns : 0, pavg = prev && prev.dns ? prev.amount / prev.dns : (prev ? 0 : null);
+  const v = inr(cur.amount, true), av = inr(avg, true);
+  const dnNote = st.F.category.size > 1 ? ' title="Delivery notes containing any selected category; a DN with several selected categories is counted once per category"' : '';
+  $('#kpis').innerHTML = `
+    <div class="kpi" style="--k:var(--c1)"><div class="lbl">Dispatch value</div><div class="val">${v.n}<small>${v.u}</small></div>${deltaHtml(cur.amount, prev && prev.amount, plabel)}</div>
+    <div class="kpi" style="--k:var(--c2)"${dnNote}><div class="lbl">Delivery notes</div><div class="val">${nfI.format(cur.dns)}</div>${deltaHtml(cur.dns, prev && prev.dns, plabel)}</div>
+    <div class="kpi" style="--k:var(--c3)"><div class="lbl">Line items</div><div class="val">${nfI.format(cur.lines)}</div>${deltaHtml(cur.lines, prev && prev.lines, plabel)}</div>
+    <div class="kpi" style="--k:var(--c5)"><div class="lbl">Average value per DN</div><div class="val">${av.n}<small>${av.u}</small></div>${deltaHtml(avg, pavg, plabel)}</div>`;
 }
 
-loadManifest();
-
-function drawStrip() {
-  const max = Math.max(...months.map(m => manifest.months[m].rows));
-  $('strip').innerHTML = months.map(m =>
-    `<button class="m" data-mon="${m}" title="${monthLabel(m)}: ${fmt.format(manifest.months[m].rows)} rows">
-       <span class="b" style="height:${Math.max(6, manifest.months[m].rows / max * 72)}px"></span>
-       <small>${MON[+m.slice(5)-1].slice(0,1)}</small></button>`).join('');
-  const years = [...new Set(months.map(m => m.slice(0,4)))];
-  $('yr').innerHTML = years.map(y => `<span>${y}</span>`).join('');
-  highlight();
-}
-function highlight() {
-  const a = $('from').value, b = $('to').value;
-  document.querySelectorAll('.m').forEach(el => {
-    const m = el.dataset.mon;
-    el.classList.toggle('sel', a && b && `${m}-01` <= b && monthEnd(m) >= a);
+// ---------- 3D tilt on headline cards ----------
+function setupTilt() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || matchMedia('(hover: none)').matches) return;
+  document.querySelector('#kpis').addEventListener('mousemove', e => {
+    const card = e.target.closest('.kpi'); if (!card) return;
+    const r = card.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
+    card.style.setProperty('--ry', (x * 10).toFixed(2) + 'deg'); card.style.setProperty('--rx', (-y * 10).toFixed(2) + 'deg');
+  });
+  document.querySelector('#kpis').addEventListener('mouseout', e => {
+    const card = e.target.closest('.kpi'); if (card && !card.contains(e.relatedTarget)) { card.style.setProperty('--rx', '0deg'); card.style.setProperty('--ry', '0deg'); }
   });
 }
-$('strip').addEventListener('click', e => {
-  const el = e.target.closest('.m'); if (!el) return;
-  const m = el.dataset.mon;
-  if (!anchor) { anchor = m; setRange(`${m}-01`, monthEnd(m)); }
-  else { const [x, y] = [anchor, m].sort(); setRange(`${x}-01`, monthEnd(y)); anchor = null; }
-});
 
-function setRange(a, b) { $('from').value = a; $('to').value = b; highlight(); $('dl').disabled = true; }
-['from','to'].forEach(id => $(id).addEventListener('change', () => { highlight(); $('dl').disabled = true; }));
-
-function quickRange(n) {
-  const today = new Date(), start = new Date(today);
-  start.setMonth(start.getMonth() - n); start.setDate(start.getDate() + 1);
-  setRange(iso(start), iso(today));
+// ---------- Breakdown lists ----------
+function renderLists() {
+  document.querySelectorAll('.list').forEach(el => {
+    const dim = el.dataset.dim, rows = breakdown(dim, st.metric);
+    const total = rows.reduce((s, r) => s + r[1], 0), max = rows.length ? Math.max(...rows.map(r => Math.abs(r[1]))) : 1;
+    const limit = st.expanded[dim] ? rows.length : 8;
+    el.classList.toggle('has-sel', st.F[dim].size > 0);
+    const strip = document.querySelector(`[data-share="${dim}"]`);
+    const pos = rows.filter(r => r[1] > 0), ptot = pos.reduce((s, r) => s + r[1], 0);
+    strip.innerHTML = ptot ? pos.map(([i, v]) => `<span style="width:${v / ptot * 100}%;background:${colorFor(dim, i)};opacity:${st.F[dim].size && !st.F[dim].has(i) ? .3 : 1}" title="${esc(S.dims[dim][i])}: ${fmtM(v, st.metric)} (${(v / ptot * 100).toFixed(1)}%)"></span>`).join('') : '';
+    if (!rows.length) { el.innerHTML = '<div class="empty">Nothing for this period and filters.</div>'; return; }
+    el.innerHTML = rows.slice(0, limit).map(([i, v]) => {
+      const name = S.dims[dim][i], sel = st.F[dim].has(i);
+      return `<button class="li${sel ? ' sel' : ''}" data-i="${i}" aria-pressed="${sel}" title="${esc(name)}" style="--k:${colorFor(dim, i)}">
+        <span class="nm">${esc(name)}</span><span class="trk"><span class="fill" style="width:${Math.max(.5, Math.abs(v) / max * 100)}%"></span></span>
+        <span class="v">${fmtM(v, st.metric)}</span><span class="sh">${total ? (v / total * 100).toFixed(v / total < .1 ? 1 : 0) : 0}%</span></button>`;
+    }).join('') + (rows.length > 8 ? `<button class="more">${st.expanded[dim] ? 'Show fewer' : `Show all ${rows.length}`}</button>` : '');
+    el.querySelectorAll('.li').forEach(b => b.onclick = () => {
+      const i = +b.dataset.i; st.F[dim].has(i) ? st.F[dim].delete(i) : st.F[dim].add(i); update();
+    });
+    const more = el.querySelector('.more'); if (more) more.onclick = () => { st.expanded[dim] = !st.expanded[dim]; renderLists(); };
+  });
 }
-document.querySelector('.quick').addEventListener('click', e => {
-  const b = e.target.closest('button'); if (!b) return;
-  anchor = null;
-  if (b.dataset.m) quickRange(+b.dataset.m);
-  else if (b.dataset.y) setRange(`${new Date().getFullYear()}-01-01`, iso(new Date()));
-  else setRange(`${months[0]}-01`, monthEnd(months.at(-1)));
-});
 
-// ---- Step 2: read the range ----
-function parseFile(file, onRows) {
+// ---------- Raw line items ----------
+const COLS = {DN_NO:['DN no.',170], posting_date:['Date',108], Project:['Project',150], workflow_state:['Workflow',100], source_warehouse:['From warehouse',190], target_warehouse:['To warehouse',160], item_category:['Category',150], item_subcategory:['Subcategory',170], item_code:['Item code',190], item_name:['Item name',340], qty:['Qty',80], uohm:['UOM',70], rate:['Rate',100], amount:['Amount',120], 'Delivery Note Status':['DN status',120], docstatus:['Doc status',90]};
+const NUMC = new Set(['qty','rate','amount','docstatus']);
+const raw = {header: null, idx: null, rows: [], matched: 0, done: false, token: 0, sort: null, view: null};
+const blobCache = new Map();
+async function getMonth(m) {
+  if (blobCache.has(m)) { const b = blobCache.get(m); blobCache.delete(m); blobCache.set(m, b); return b; }
+  const info = manifest.months[m];
+  const res = await fetch(`dn/${info.file}?v=${encodeURIComponent(manifest.last_refresh)}`);
+  if (!res.ok) throw new Error(`Could not download ${info.file} (${res.status})`);
+  const blob = await new Response(res.body.pipeThrough(new DecompressionStream('gzip'))).blob();
+  blobCache.set(m, blob);
+  while (blobCache.size > 4) blobCache.delete(blobCache.keys().next().value);
+  return blob;
+}
+function parseBlob(blob, onRows, isLive) {
   return new Promise((resolve, reject) => {
     let first = true;
-    Papa.parse(file, {
+    Papa.parse(blob, {
       skipEmptyLines: true,
-      chunk: r => {
+      chunk: (r, parser) => {
+        if (!isLive()) { parser.abort(); return; }
         let rows = r.data;
-        if (first) { onRows(null, rows[0]); rows = rows.slice(1); first = false; }
+        if (first) { setHeader(rows[0]); rows = rows.slice(1); first = false; }
         onRows(rows);
       },
       complete: resolve, error: reject
     });
   });
 }
-
-$('show').addEventListener('click', async () => {
-  const a = $('from').value, b = $('to').value;
-  if (!a || !b) return setStatus('Choose both a start and an end date.', 'err');
-  if (a > b) return setStatus('The start date is after the end date.', 'err');
-  const need = months.filter(m => `${m}-01` <= b && monthEnd(m) >= a).reverse(); // newest first
-  if (!need.length) return setStatus('No data covers that range yet. Run the Sync DN data workflow to fetch newer months.', 'err');
-
-  $('show').disabled = true; $('dl').disabled = true;
-  const r = { a, b, header: null, rows: 0, dns: new Set(), proj: new Set(), qty: 0, amt: 0,
-              byMonth: [], preview: [], parts: [] };
-  let idx = null;
+function setHeader(h) {
+  if (raw.header) return;
+  h[0] = h[0].replace(/^\uFEFF/, '');
+  raw.header = h;
+  const f = n => h.indexOf(n);
+  raw.idx = {dn: f('DN_NO'), date: f('posting_date'), proj: f('Project'), wh: f('source_warehouse'), cat: f('item_category'), code: f('item_code'), name: f('item_name')};
+  buildHead();
+}
+function makeMatcher() {
+  const names = {}; for (const d of DIMS) names[d] = st.F[d].size ? new Set([...st.F[d]].map(i => S.dims[d][i])) : null;
+  const q = st.q.trim().toLowerCase(), cache = new Map(), I = raw.idx;
+  return row => {
+    if (names.warehouse && !names.warehouse.has(norm(row[I.wh], 'No warehouse'))) return false;
+    if (names.category && !names.category.has(norm(row[I.cat], 'Uncategorised'))) return false;
+    if (names.group || names.state) {
+      let ci = cache.get(row[I.proj]); if (!ci) { ci = customerInfo(row[I.proj]); cache.set(row[I.proj], ci); }
+      if (names.group && !names.group.has(ci[0])) return false;
+      if (names.state && !names.state.has(ci[1])) return false;
+    }
+    if (q) {
+      const hay = `${row[I.dn]}\u0001${row[I.proj]}\u0001${row[I.code]}\u0001${row[I.name]}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  };
+}
+const monthsInRange = () => M.slice(st.range[0], st.range[1] + 1).reverse(); // newest first
+async function loadRaw() {
+  const my = ++raw.token, live = () => my === raw.token;
+  raw.rows = []; raw.matched = 0; raw.done = false; raw.sort = null; raw.view = null;
+  const searching = !!st.q.trim();
+  const known = searching ? null : totals(...st.range).lines;
+  const months = monthsInRange();
+  setProg(0); renderRawStat(known, true); renderBody();
+  let match = null, lastPaint = 0;
   try {
-    for (let i = 0; i < need.length; i++) {
-      const m = need[i];
-      const full = `${m}-01` >= a && monthEnd(m) <= b;
-      const keep = [];
-      const ms = { m, rows: 0, amt: 0 };
-      setStatus(`Loading ${monthLabel(m)} (${i+1} of ${need.length})…`);
-      const file = await getMonth(m);
-      await parseFile(file, (rows, header) => {
-        if (header) {
-          header[0] = header[0].replace(/^\uFEFF/, '');
-          if (!r.header) {
-            r.header = header;
-            const f = n => header.findIndex(h => h.trim().toLowerCase() === n);
-            idx = { date: f('posting_date'), dn: f('dn_no'), proj: f('project'), qty: f('qty'), amt: f('amount') };
-            if (idx.date < 0) throw new Error('The files have no posting_date column. Re-run the Sync DN data workflow with full re-export.');
-          }
-          return;
-        }
+    for (let k = 0; k < months.length; k++) {
+      if (!live()) return;
+      const blob = await getMonth(months[k]);
+      if (!live()) return;
+      await parseBlob(blob, rows => {
+        if (!match) match = makeMatcher();
         for (const row of rows) {
-          if (!full) { const d = dateKey(row[idx.date]); if (d < a || d > b) continue; keep.push(row); }
-          r.rows++; ms.rows++;
-          r.dns.add(row[idx.dn]); r.proj.add(row[idx.proj]);
-          r.qty += num(row[idx.qty]);
-          const v = num(row[idx.amt]); r.amt += v; ms.amt += v;
-          if (r.preview.length < PREVIEW_ROWS) r.preview.push(row);
+          if (!match(row)) continue;
+          raw.matched++;
+          if (raw.rows.length < CAP) raw.rows.push(row);
         }
-      });
-      r.byMonth.push(ms);
-      r.parts.push(full ? { file } : { rows: keep });
+        const now = performance.now();
+        if (now - lastPaint > 250) { lastPaint = now; renderRawStat(known, true); renderBody(); }
+      }, live);
+      setProg((k + 1) / months.length);
+      if (!searching && raw.rows.length >= CAP) break;   // enough rows to show; the total is known from the summary
     }
-    result = r;
-    render(r);
-    const excel = r.rows > EXCEL_MAX ? ' Note: this is more rows than Excel can open in one sheet.' : '';
-    setStatus(`${fmt.format(r.rows)} rows ready to download.${excel}`, 'ok');
-    $('dl').disabled = r.rows === 0;
-  } catch (err) {
-    setStatus(err.message || 'Could not read the files.', 'err');
-  } finally { $('show').disabled = false; }
-});
-
-function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-
-function render(r) {
-  $('results').classList.remove('hidden');
-  $('sRows').textContent = fmt.format(r.rows);
-  $('sDns').textContent = fmt.format(r.dns.size);
-  $('sProj').textContent = fmt.format(r.proj.size);
-  $('sQty').textContent = fmt.format(r.qty);
-  $('sAmt').textContent = fmt.format(r.amt);
-  $('monthTbl').innerHTML = '<tr><th>Month</th><th style="text-align:right">Rows</th><th style="text-align:right">Amount (₹)</th></tr>' +
-    r.byMonth.map(x => `<tr><td>${monthLabel(x.m)}</td><td class="n">${fmt.format(x.rows)}</td><td class="n">${fmt.format(x.amt)}</td></tr>`).join('');
-  const numCols = new Set(['qty','rate','amount','docstatus']);
-  const h = r.header || [];
-  $('prevTbl').innerHTML = '<tr>' + h.map(c => `<th>${esc(c)}</th>`).join('') + '</tr>' +
-    r.preview.map(row => '<tr>' + row.map((c, i) => {
-      const n = numCols.has(h[i]?.toLowerCase());
-      return `<td${n ? ' class="n"' : ''}>${esc(n && c !== '' ? fmt2.format(num(c)) : c)}</td>`;
-    }).join('') + '</tr>').join('');
-  $('prevNote').textContent = r.rows > PREVIEW_ROWS
-    ? `Showing the latest ${PREVIEW_ROWS} of ${fmt.format(r.rows)} rows. The download has all of them.`
-    : `Showing all ${fmt.format(r.rows)} rows.`;
-}
-
-// ---- Download ----
-async function headerOffset(file) {
-  const buf = new Uint8Array(await file.slice(0, 1 << 20).arrayBuffer());
-  const i = buf.indexOf(10);
-  return i < 0 ? file.size : i + 1;
-}
-async function endsWithNewline(file) {
-  if (!file.size) return true;
-  const b = new Uint8Array(await file.slice(-1).arrayBuffer());
-  return b[0] === 10;
-}
-
-$('dl').addEventListener('click', async () => {
-  if (!result) return;
-  $('dl').disabled = true; setStatus('Preparing download…');
-  const blobParts = ['\uFEFF' + Papa.unparse([result.header]) + '\n'];
-  for (const p of result.parts) {
-    if (p.file) {
-      blobParts.push(p.file.slice(await headerOffset(p.file)));   // whole month, copied as-is
-      if (!(await endsWithNewline(p.file))) blobParts.push('\n');
-    } else if (p.rows.length) {
-      blobParts.push(Papa.unparse(p.rows) + '\n');
-    }
+  } catch (e) {
+    if (live()) { $('#rawstat').textContent = e.message; setProg(null); }
+    return;
   }
-  const url = URL.createObjectURL(new Blob(blobParts, { type: 'text/csv' }));
-  const a = document.createElement('a');
-  a.href = url; a.download = `DN_${result.a}_to_${result.b}.csv`;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
-  setStatus(`Downloaded DN_${result.a}_to_${result.b}.csv (${fmt.format(result.rows)} rows).`, 'ok');
-  $('dl').disabled = false;
+  if (!live()) return;
+  raw.done = true; setProg(null);
+  renderRawStat(searching ? raw.matched : known, false); renderBody(); buildHead();
+}
+function setProg(p) { const el = $('#prog'); el.classList.toggle('on', p != null); el.firstElementChild.style.width = ((p || 0) * 100) + '%'; }
+function renderRawStat(total, loading) {
+  const shown = raw.rows.length, el = $('#rawstat');
+  const searching = !!st.q.trim();
+  if (loading && !shown) { el.textContent = searching ? `Searching ${rangeLabel(...st.range)}…` : 'Loading line items…'; return; }
+  if (!searching && loading) { el.innerHTML = `Loading the newest line items… <b>${nfI.format(shown)}</b> of <b>${nfI.format(total)}</b>`; return; }
+  if (searching && loading) { el.innerHTML = `<b>${nfI.format(raw.matched)}</b> matches so far, still searching ${rangeLabel(...st.range)}…`; return; }
+  const t = total ?? raw.matched;
+  if (!t) { el.textContent = searching ? `No line items match "${st.q}" in ${rangeLabel(...st.range)}.` : 'No line items for this period and filters.'; return; }
+  el.innerHTML = shown < t
+    ? `Showing the newest <b>${nfI.format(shown)}</b> of <b>${nfI.format(t)}</b> line items. Search or filter to narrow down; the download includes all ${nfI.format(t)}.`
+    : `<b>${nfI.format(t)}</b> line items. Click a column heading to sort.`;
+}
+function buildHead() {
+  if (!raw.header) return;
+  const sortable = raw.done && raw.rows.length === (st.q.trim() ? raw.matched : totals(...st.range).lines);
+  $('#tbl colgroup').innerHTML = raw.header.map(h => `<col style="width:${(COLS[h] || [h, 140])[1]}px">`).join('');
+  $('#tbl thead').innerHTML = '<tr>' + raw.header.map((h, i) => {
+    const arr = raw.sort && raw.sort.i === i ? `<span class="arr">${raw.sort.dir > 0 ? '↑' : '↓'}</span>` : '';
+    return `<th class="${NUMC.has(h) ? 'n ' : ''}${sortable ? 'sortable' : ''}" data-i="${i}" ${sortable ? '' : 'title="Sorting is available once every matching row is loaded"'}>${esc((COLS[h] || [h])[0])}${arr}</th>`;
+  }).join('') + '</tr>';
+  $('#tbl').style.width = raw.header.reduce((s, h) => s + (COLS[h] || [h, 140])[1], 0) + 'px';
+  if (sortable) $('#tbl thead').querySelectorAll('th').forEach(th => th.onclick = () => sortBy(+th.dataset.i));
+}
+function sortBy(i) {
+  const dir = raw.sort && raw.sort.i === i ? -raw.sort.dir : (NUMC.has(raw.header[i]) ? -1 : 1);
+  raw.sort = {i, dir};
+  const isNum = NUMC.has(raw.header[i]);
+  raw.view = raw.rows.slice().sort((a, b) => {
+    const x = a[i], y = b[i];
+    return (isNum ? (parseFloat(x) || 0) - (parseFloat(y) || 0) : String(x).localeCompare(String(y))) * dir;
+  });
+  buildHead(); renderBody();
+}
+let paintQueued = false;
+function renderBody() {
+  const wrap = $('#tblWrap'), tb = $('#tbl tbody'), rows = raw.view || raw.rows;
+  if (!raw.header) { tb.innerHTML = ''; return; }
+  if (!rows.length) { tb.innerHTML = `<tr><td colspan="${raw.header.length}" class="tbl-empty">${raw.done ? 'No line items to show.' : 'Loading…'}</td></tr>`; return; }
+  const start = Math.max(0, Math.floor(wrap.scrollTop / RH) - 10);
+  const count = Math.ceil(wrap.clientHeight / RH) + 20, end = Math.min(rows.length, start + count);
+  let h = `<tr style="height:${start * RH}px"></tr>`;
+  const H = raw.header;
+  for (let r = start; r < end; r++) {
+    const row = rows[r];
+    h += '<tr>' + H.map((c, i) => {
+      const v = row[i] ?? '';
+      if (i === 0) return `<td class="dn" data-dn="${esc(v)}">${esc(v)}</td>`;
+      if (c === 'posting_date') return `<td>${fmtDate(v)}</td>`;
+      if (c === 'item_category') { const ci = catIndex.get(norm(v, 'Uncategorised')); return `<td title="${esc(v)}"><span class="pill" style="--k:${ci == null ? 'var(--c10)' : colorFor('category', ci)}">${esc(v)}</span></td>`; }
+      if (c === 'amount') return `<td class="n amt">${v === '' ? '' : nf2.format(parseFloat(String(v).replace(/,/g, '')) || 0)}</td>`;
+      if (NUMC.has(c)) return `<td class="n">${v === '' ? '' : (c === 'docstatus' ? esc(v) : nf2.format(parseFloat(String(v).replace(/,/g, '')) || 0))}</td>`;
+      return `<td title="${esc(v)}">${esc(v)}</td>`;
+    }).join('') + '</tr>';
+  }
+  h += `<tr style="height:${(rows.length - end) * RH}px"></tr>`;
+  tb.innerHTML = h;
+}
+$('#tblWrap').addEventListener('scroll', () => { if (!paintQueued) { paintQueued = true; requestAnimationFrame(() => { paintQueued = false; renderBody(); }); } });
+$('#tbl').addEventListener('click', e => { const td = e.target.closest('td.dn'); if (td) { $('#q').value = td.dataset.dn; st.q = td.dataset.dn; writeHash(); loadRaw(); } });
+let qTimer;
+$('#q').addEventListener('input', e => { clearTimeout(qTimer); qTimer = setTimeout(() => { st.q = e.target.value; writeHash(); loadRaw(); }, 350); });
+
+// ---------- Download ----------
+$('#dl').addEventListener('click', async () => {
+  const btn = $('#dl'); btn.disabled = true;
+  const my = ++raw.token, live = () => my === raw.token;  // pauses table loading while downloading
+  const months = monthsInRange(), filtered = DIMS.some(d => st.F[d].size) || st.q.trim();
+  const parts = [];
+  try {
+    if (!filtered) {
+      for (let k = 0; k < months.length; k++) {
+        $('#rawstat').textContent = `Preparing download: ${mLabel(months[k])} (${k + 1} of ${months.length})…`; setProg(k / months.length);
+        const blob = await getMonth(months[k]);
+        const head = new Uint8Array(await blob.slice(0, 1 << 20).arrayBuffer()), nl = head.indexOf(10);
+        if (!parts.length) parts.push(blob.slice(0, nl + 1));
+        parts.push(blob.slice(nl + 1));
+        const lastByte = new Uint8Array(await blob.slice(-1).arrayBuffer())[0];
+        if (lastByte !== 10) parts.push('\n');
+      }
+    } else {
+      let match = null, n = 0;
+      for (let k = 0; k < months.length; k++) {
+        $('#rawstat').textContent = `Preparing download: ${mLabel(months[k])} (${k + 1} of ${months.length}), ${nfI.format(n)} rows so far…`; setProg(k / months.length);
+        const blob = await getMonth(months[k]);
+        await parseBlob(blob, rows => {
+          if (!match) { match = makeMatcher(); parts.push('\uFEFF' + Papa.unparse([raw.header]) + '\n'); }
+          const keep = rows.filter(match); n += keep.length;
+          if (keep.length) parts.push(Papa.unparse(keep) + '\n');
+        }, live);
+      }
+    }
+    const name = `DN_line_items_${M[st.range[0]]}_to_${M[st.range[1]]}${filtered ? '_filtered' : ''}.csv`;
+    const url = URL.createObjectURL(new Blob(parts, {type: 'text/csv'}));
+    const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) { alert('Download failed: ' + e.message); }
+  btn.disabled = false; setProg(null);
+  loadRaw();
 });
+
+// ---------- Wiring ----------
+function update() {
+  writeHash(); renderPresets(); renderChips(); renderKpis(); renderLists();
+  loadRaw();
+}
+document.querySelector('#presets').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; st.range = presetRanges()[b.dataset.p]; update(); });
+document.querySelector('#metric').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; st.metric = b.dataset.m; writeHash(); renderPresets(); renderLists(); });
+function setupRange() {
+  const opts = M.map((k, i) => `<option value="${i}">${mLabel(k)}${i === M.length - 1 && !isFullMonth(i) ? ' (to date)' : ''}</option>`).join('');
+  $('#fromM').innerHTML = opts; $('#toM').innerHTML = opts;
+  const onChange = () => { let a = +$('#fromM').value, b = +$('#toM').value; if (a > b) [a, b] = [b, a]; st.range = [a, b]; update(); };
+  $('#fromM').addEventListener('change', onChange); $('#toM').addEventListener('change', onChange);
+}
+$('#copyLink').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(location.href); $('#copyLink').textContent = 'Link copied'; } catch (e) { prompt('Copy this link:', location.href); }
+  setTimeout(() => $('#copyLink').textContent = 'Copy link to this view', 2000);
+});
+
+(async function init() {
+  try {
+    const bust = '?t=' + Date.now();
+    const [m, s] = await Promise.all([
+      fetch('dn/manifest.json' + bust, {cache: 'no-store'}).then(r => { if (!r.ok) throw new Error('manifest'); return r.json(); }),
+      fetch('dn/summary.json' + bust, {cache: 'no-store'}).then(r => { if (!r.ok) throw new Error('summary'); return r.json(); })
+    ]);
+    manifest = m; S = s; M = S.months;
+    S.dims.category.forEach((n, i) => catIndex.set(n, i));
+  } catch (e) {
+    $('#msg').innerHTML = e.message === 'summary'
+      ? 'The dashboard summary hasn\'t been built yet. Go to <b>Actions → Sync DN data → Run workflow</b>, wait for it to finish, then reload this page.'
+      : 'No data yet. Go to <b>Actions → Sync DN data → Run workflow</b>, wait for it to finish, then reload this page.';
+    $('#fresh').textContent = '';
+    return;
+  }
+  st.range = [0, M.length - 1];
+  readHash();
+  if (st.q) $('#q').value = st.q;
+  $('#msg').remove(); $('#app').hidden = false;
+  renderHeader(); setupRange(); setupTilt(); update();
+})();
 </script>
 </body>
 </html>
