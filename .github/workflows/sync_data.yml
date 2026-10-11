@@ -1,0 +1,59 @@
+name: Sync dashboard data
+
+on:
+  workflow_dispatch:            # "Run workflow" button in the Actions tab
+    inputs:
+      dataset:
+        description: "Which data to refresh"
+        type: choice
+        options: [both, dn, bom]
+        default: both
+      full:
+        description: "Re-export every month (slow)"
+        type: boolean
+        default: false
+  # Uncomment to also refresh both automatically every day at 10:00 AM IST:
+  # schedule:
+  #   - cron: "30 4 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repo-data-sync         # never run two syncs at the same time
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      METABASE_USERNAME: ${{ secrets.METABASE_USERNAME }}
+      METABASE_PASSWORD: ${{ secrets.METABASE_PASSWORD }}
+      METABASE_API_KEY: ${{ secrets.METABASE_API_KEY }}   # optional; used instead of login if set
+      FULL: ${{ inputs.full && '--full' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install requests
+
+      - name: Export data from Metabase
+        run: python sync_data.py ${{ inputs.dataset || 'both' }} $FULL
+
+      - name: Commit changes
+        if: always()                         # save whatever finished successfully
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          for d in dn bom; do if [ -d "$d" ]; then git add "$d"; fi; done
+          if git diff --cached --quiet; then
+            echo "No changes."
+          else
+            git commit -m "Dashboard data sync $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git pull --rebase
+            git push
+          fi
