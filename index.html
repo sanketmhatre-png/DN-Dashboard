@@ -215,7 +215,7 @@ footer{color:var(--faint);font-size:12.5px;padding:0 0 40px}
     <h2>Breakdown</h2>
     <div class="seg" id="metric" role="group" aria-label="Measure">
       <button data-m="amount">Value</button>
-      <button data-m="dns">Delivery notes</button>
+      <button data-m="dns" id="mDocs">Delivery notes</button>
       <button data-m="lines">Line items</button>
     </div>
   </div>
@@ -809,7 +809,7 @@ async function loadDataset(key, fromHash) {
   document.querySelectorAll('#dsSwitch button').forEach(b => b.setAttribute('aria-pressed', b.dataset.ds === DS.page));
   document.title = DS.title;
   $('#tGroup').textContent = DS.groupTitle; $('#hGroup').textContent = DS.groupHint; $('#hWh').textContent = DS.whHint;
-  $('#hTable').textContent = DS.tableHint; $('#q').placeholder = DS.searchPh; $('#foot').textContent = DS.footer;
+  $('#mDocs').textContent = DS.docsLabel; $('#hTable').textContent = DS.tableHint; $('#q').placeholder = DS.searchPh; $('#foot').textContent = DS.footer;
   // forget everything from the previous dataset
   raw.token++; upTok++;
   Object.assign(raw, {header: null, idx: null, rows: [], matched: 0, done: false, sort: null, view: null, layout: null});
