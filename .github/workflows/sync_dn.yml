@@ -1,4 +1,4 @@
-name: Sync DN data
+name: Sync BOM data
 
 on:
   workflow_dispatch:            # "Run workflow" button in the Actions tab
@@ -31,22 +31,22 @@ jobs:
 
       - run: pip install requests
 
-      - name: Export DN data from Metabase
+      - name: Export BOM data from Metabase
         env:
           METABASE_USERNAME: ${{ secrets.METABASE_USERNAME }}
           METABASE_PASSWORD: ${{ secrets.METABASE_PASSWORD }}
           METABASE_API_KEY: ${{ secrets.METABASE_API_KEY }}   # optional; used instead of login if set
-        run: python sync_dn.py ${{ inputs.full && '--full' || '' }}
+        run: python sync_bom.py ${{ inputs.full && '--full' || '' }}
 
       - name: Commit changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add dn/
+          git add bom/
           if git diff --cached --quiet; then
             echo "No changes."
           else
-            git commit -m "DN data sync $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git commit -m "BOM data sync $(date -u +'%Y-%m-%d %H:%M UTC')"
             git pull --rebase
             git push
           fi
