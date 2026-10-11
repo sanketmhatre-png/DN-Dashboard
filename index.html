@@ -46,6 +46,10 @@ header.top{padding-top:30px;padding-bottom:20px}
 h1{font-size:32px;font-weight:700;letter-spacing:-.02em;margin:0;line-height:1.1;background:linear-gradient(90deg,#FFFFFF,#A9C4FF 60%,#C4B5FD);-webkit-background-clip:text;background-clip:text;color:transparent}
 .fresh{color:var(--muted);margin-top:8px}
 .fresh b{color:var(--ink);font-weight:500}
+.pages{display:inline-flex}
+.pages button{padding:7px 16px;font-weight:600}
+.pages button[aria-pressed="true"]{color:#fff;background:linear-gradient(180deg,#6A9DFF,#3D74EA);box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 6px 14px -4px rgba(79,140,255,.7)}
+.top-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .ghost{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 14px;font-weight:500;color:var(--ink);box-shadow:var(--raise);transition:transform .15s,box-shadow .15s}
 .ghost:hover{transform:translateY(-1px);box-shadow:var(--raise-hi)}
 .ghost:active{transform:translateY(1px);box-shadow:var(--sunk)}
@@ -185,7 +189,10 @@ footer{color:var(--faint);font-size:12.5px;padding:0 0 40px}
       <h1>Procurement Dashboard</h1>
       <div class="fresh" id="fresh">Loading…</div>
     </div>
-    <button class="ghost" id="copyLink" title="Copy a link to this exact view">Copy link to this view</button>
+    <div class="top-actions">
+      <div class="seg pages" id="dsSwitch" role="group" aria-label="Dataset"><button data-ds="dn">Delivery notes</button><button data-ds="bom">BOMs</button></div>
+      <button class="ghost" id="copyLink" title="Copy a link to this exact view">Copy link to this view</button>
+    </div>
   </div>
 </header>
 
@@ -215,16 +222,16 @@ footer{color:var(--faint);font-size:12.5px;padding:0 0 40px}
 
   <section class="grid">
     <div class="panel"><div class="ph"><h2><span class="dot" style="background:var(--c1);color:var(--c1)"></span>By state</h2><span class="hint">From project ID</span></div><div class="share" data-share="state"></div><div class="list" data-dim="state"></div></div>
-    <div class="panel"><div class="ph"><h2><span class="dot" style="background:var(--c5);color:var(--c5)"></span>By customer group</h2><span class="hint">Click to filter</span></div><div class="share" data-share="group"></div><div class="list" data-dim="group"></div></div>
+    <div class="panel"><div class="ph"><h2><span class="dot" style="background:var(--c5);color:var(--c5)"></span><span id="tGroup">By customer group</span></h2><span class="hint" id="hGroup">Click to filter</span></div><div class="share" data-share="group"></div><div class="list" data-dim="group"></div></div>
     <div class="panel"><div class="ph"><h2><span class="dot" style="background:var(--c3);color:var(--c3)"></span>By item category</h2><span class="hint">Click to filter</span></div><div class="share" data-share="category"></div><div class="list" data-dim="category"></div></div>
-    <div class="panel"><div class="ph"><h2><span class="dot" style="background:var(--c2);color:var(--c2)"></span>By warehouse</h2><span class="hint">Dispatching warehouse</span></div><div class="share" data-share="warehouse"></div><div class="list" data-dim="warehouse"></div></div>
+    <div class="panel"><div class="ph"><h2><span class="dot" style="background:var(--c2);color:var(--c2)"></span>By warehouse</h2><span class="hint" id="hWh">Dispatching warehouse</span></div><div class="share" data-share="warehouse"></div><div class="list" data-dim="warehouse"></div></div>
   </section>
 
   <section class="panel raw">
     <div class="ph">
       <div>
         <h2>Line items</h2>
-        <div class="hint">Every delivery note line for the period and filters above. Click a DN number to see all its lines.</div>
+        <div class="hint" id="hTable">Every delivery note line for the period and filters above. Click a DN number to see all its lines.</div>
       </div>
       <div class="raw-tools">
         <label class="search">
@@ -239,18 +246,61 @@ footer{color:var(--faint);font-size:12.5px;padding:0 0 40px}
     <div class="tbl-wrap" id="tblWrap"><table id="tbl"><colgroup></colgroup><thead></thead><tbody></tbody></table></div>
   </section>
 
-  <footer>Values are delivery note amounts in ₹ for submitted delivery notes (cancelled DNs excluded), from ERP via Metabase question DN_S. Internal transfers are delivery notes to "Solarsquare Energy Pvt Ltd – Debtors".</footer>
+  <footer id="foot">Values are delivery note amounts in ₹ for submitted delivery notes (cancelled DNs excluded), from ERP via Metabase question DN_S. Internal transfers are delivery notes to "Solarsquare Energy Pvt Ltd – Debtors".</footer>
 </main>
 <div id="msg" class="wrap">Loading dashboard…</div>
 
 <script>
 'use strict';
 const $ = s => document.querySelector(s);
+// ================= Dataset settings =================
+// Two datasets share this page; the switch in the header changes which one is shown.
+const DATASETS = {
+ dn: {
+  page: 'dn', folder: 'dn', workflow: 'Sync DN data', filePrefix: 'DN_line_items',
+  valueLabel: 'Dispatch value', docsLabel: 'Delivery notes', avgLabel: 'Average value per DN',
+  groupLabel: 'Customer group', groupFromStatus: false, defaultExcludeGroup: null,
+  col: {id: 'DN_NO', date: 'posting_date', proj: 'Project', wh: 'source_warehouse', cat: 'item_category', code: 'item_code', name: 'item_name', amt: 'amount', status: null},
+  // [label, minimum width px, share of spare width, priority]; low-priority columns hide on narrow screens
+  cols: {DN_NO:['DN no.',150,1,10], posting_date:['Date',100,0,8], Project:['Project',118,1,9],
+    source_warehouse:['From warehouse',150,1.5,5], item_category:['Category',115,1,6], item_subcategory:['Subcategory',115,1,2],
+    item_code:['Item code',125,1.2,4], item_name:['Item name',210,4,10], qty:['Qty',56,0,7], uohm:['UOM',60,0,1],
+    rate:['Rate',100,.3,6], amount:['Amount',110,.4,10], 'Delivery Note Status':['DN status',84,.3,3]},
+  hide: ['workflow_state', 'target_warehouse', 'docstatus'],   // in the CSV download, not on screen
+  num: ['qty', 'rate', 'amount', 'docstatus'],
+  title: 'Procurement Dashboard | SolarSquare',
+  groupTitle: 'By customer group', groupHint: 'Click to filter', whHint: 'Dispatching warehouse',
+  tableHint: 'Every delivery note line for the period and filters above. Click a DN number to see all its lines.',
+  searchPh: 'Search DN, project ID, item code or name',
+  footer: 'Values are delivery note amounts in ₹ for submitted delivery notes (cancelled DNs excluded), from ERP via Metabase question DN_S. Internal transfers are delivery notes to "Solarsquare Energy Pvt Ltd – Debtors".'
+},
+ bom: {
+  page: 'bom', folder: 'bom', workflow: 'Sync BOM data', filePrefix: 'BOM_line_items',
+  valueLabel: 'BOM value', docsLabel: 'BOMs', avgLabel: 'Average value per BOM',
+  groupLabel: 'Status', groupFromStatus: true, defaultExcludeGroup: /cancel/i,
+  col: {id: 'bom_id', date: 'creation_date', proj: 'project', wh: 'warehouse', cat: 'item_category', code: 'item_code', name: 'bom_item_item_name', amt: 'amount', status: 'workflow_state'},
+  // [label, minimum width px, share of spare width, priority]; low-priority columns hide on narrow screens
+  cols: {bom_id:['BOM no.',185,1,10], creation_date:['Created',100,0,8], project:['Project',118,1,9],
+    item:['BOM for item',120,.8,2], item_name:['BOM item name',150,1.5,1], quantity:['BOM qty',70,0,1],
+    warehouse:['Warehouse',145,1.3,5], item_category:['Category',115,1,6], item_code:['Item code',125,1.2,4],
+    bom_item_item_name:['Item name',200,4,10], qty:['Qty',56,0,7], rate:['Rate',100,.3,6], amount:['Amount',110,.4,10],
+    workflow_state:['Status',90,.3,3]},
+  hide: ['bom_item_name', 'docstatus'],   // in the CSV download, not on screen
+  num: ['quantity', 'qty', 'rate', 'amount', 'docstatus'],
+  title: 'BOMs | Procurement Dashboard | SolarSquare',
+  groupTitle: 'By status', groupHint: 'BOM workflow state', whHint: 'BOM warehouse',
+  tableHint: 'Every BOM line created in the period, with the filters above. Click a BOM number to see all its lines.',
+  searchPh: 'Search BOM, project ID, item code or name',
+  footer: 'Values are BOM line amounts in ₹, dated by when each BOM was created, from ERP via Metabase question BOM_S. Cancelled BOMs are left out by default; remove the Status filter to include them.'
+}
+};
+let DS = DATASETS.dn;
+// ==================================================================================================================
 const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DIMS = ['warehouse','category','group','state'];
 const CPOS = {warehouse:1, category:2, group:3, state:4};   // positions in cube rows
 const DPOS = {warehouse:1, group:2, state:3};               // positions in dn_cube rows
-const DIM_LABEL = {warehouse:'Warehouse', category:'Category', group:'Customer group', state:'State'};
+const DIM_LABEL = {warehouse:'Warehouse', category:'Category', group:DS.groupLabel, state:'State'};
 const CAP = 250000, RH = 34;
 const PAL = ['--c1','--c2','--c3','--c4','--c5','--c6','--c7','--c8','--c9','--c10'];
 const DIM_COLOR = {state:'--c1', group:'--c5', category:'--c3', warehouse:'--c2'};
@@ -308,6 +358,11 @@ function customerInfo(c) {
   return ['Other customers', NO_STATE];
 }
 const norm = (v, empty) => (v || '').split(/\s+/).filter(Boolean).join(' ') || empty;
+// [group, state] for a row: group is the customer group (DN) or the BOM status; state comes from the project ID
+function groupState(proj, status) {
+  const ci = customerInfo(proj);
+  return DS.groupFromStatus ? [norm(status, 'No status'), ci[1]] : ci;
+}
 
 // ---------- State ----------
 let S, M, manifest, cubeByMonth, dnByMonth;
@@ -330,7 +385,7 @@ function readHash() {
   } catch (e) {}
 }
 function writeHash() {
-  const h = {r: [st.from, st.to], m: st.metric};
+  const h = {d: DS.page, r: [st.from, st.to], m: st.metric};
   for (const d of DIMS) if (st.F[d].size) h[d] = [...st.F[d]].map(i => S.dims[d][i]);
   if (st.q) h.q = st.q;
   history.replaceState(null, '', '#' + encodeURIComponent(JSON.stringify(h)));
@@ -354,7 +409,7 @@ function dimIdx(k, name) {
   if (i === undefined) { i = S.dims[k].length; S.dims[k].push(name); S.dimMap[k].set(name, i); }
   return i;
 }
-const partCache = new Map();
+let partCache = new Map();
 async function partial(seg) {
   const key = `${seg.i}|${seg.f}|${seg.t}`;
   if (partCache.has(key)) return partCache.get(key);
@@ -365,7 +420,8 @@ async function partial(seg) {
     for (const r of rows) {
       const d = rowDate(r[I.date]);
       if (d < seg.f || d > seg.t) continue;
-      let ci = cust.get(r[I.proj]); if (!ci) { ci = customerInfo(r[I.proj]); cust.set(r[I.proj], ci); }
+      const ck = I.status >= 0 ? r[I.proj] + '\u0001' + r[I.status] : r[I.proj];
+      let ci = cust.get(ck); if (!ci) { ci = groupState(r[I.proj], r[I.status]); cust.set(ck, ci); }
       const w = dimIdx('warehouse', norm(r[I.wh], 'No warehouse')), c = dimIdx('category', norm(r[I.cat], 'Uncategorised'));
       const g = dimIdx('group', ci[0]), s = dimIdx('state', ci[1]);
       const k = `${w}|${c}|${g}|${s}`;
@@ -450,12 +506,12 @@ function renderKpis() {
   const cur = totals(view), prev = view.prev ? totals(view.prev) : null, plabel = view.prevLabel;
   const avg = cur.dns ? cur.amount / cur.dns : 0, pavg = prev && prev.dns ? prev.amount / prev.dns : (prev ? 0 : null);
   const v = inr(cur.amount, true), av = inr(avg, true);
-  const dnNote = st.F.category.size > 1 ? ' title="Delivery notes containing any selected category; a DN with several selected categories is counted once per category"' : '';
+  const dnNote = st.F.category.size > 1 ? ` title="${DS.docsLabel} containing any selected category; one with several selected categories is counted once per category"` : '';
   $('#kpis').innerHTML = `
-    <div class="kpi" style="--k:var(--c1)"><div class="lbl">Dispatch value</div><div class="val">${v.n}<small>${v.u}</small></div>${deltaHtml(cur.amount, prev && prev.amount, plabel)}</div>
-    <div class="kpi" style="--k:var(--c2)"${dnNote}><div class="lbl">Delivery notes</div><div class="val">${nfI.format(cur.dns)}</div>${deltaHtml(cur.dns, prev && prev.dns, plabel)}</div>
+    <div class="kpi" style="--k:var(--c1)"><div class="lbl">${DS.valueLabel}</div><div class="val">${v.n}<small>${v.u}</small></div>${deltaHtml(cur.amount, prev && prev.amount, plabel)}</div>
+    <div class="kpi" style="--k:var(--c2)"${dnNote}><div class="lbl">${DS.docsLabel}</div><div class="val">${nfI.format(cur.dns)}</div>${deltaHtml(cur.dns, prev && prev.dns, plabel)}</div>
     <div class="kpi" style="--k:var(--c3)"><div class="lbl">Line items</div><div class="val">${nfI.format(cur.lines)}</div>${deltaHtml(cur.lines, prev && prev.lines, plabel)}</div>
-    <div class="kpi" style="--k:var(--c5)"><div class="lbl">Average value per DN</div><div class="val">${av.n}<small>${av.u}</small></div>${deltaHtml(avg, pavg, plabel)}</div>`;
+    <div class="kpi" style="--k:var(--c5)"><div class="lbl">${DS.avgLabel}</div><div class="val">${av.n}<small>${av.u}</small></div>${deltaHtml(avg, pavg, plabel)}</div>`;
 }
 
 // ---------- 3D tilt on headline cards ----------
@@ -496,16 +552,9 @@ function renderLists() {
 }
 
 // ---------- Raw line items ----------
-// Columns: [label, minimum width px, share of spare width, priority]. The table always fits the
-// screen: on narrow screens the lowest-priority columns are hidden (they stay in the CSV download).
-const COLS = {DN_NO:['DN no.',150,1,10], posting_date:['Date',100,0,8], Project:['Project',118,1,9],
-  source_warehouse:['From warehouse',150,1.5,5], item_category:['Category',115,1,6], item_subcategory:['Subcategory',115,1,2],
-  item_code:['Item code',125,1.2,4], item_name:['Item name',210,4,10], qty:['Qty',56,0,7], uohm:['UOM',60,0,1],
-  rate:['Rate',100,.3,6], amount:['Amount',110,.4,10], 'Delivery Note Status':['DN status',84,.3,3]};
-// Shown in the CSV download but not on screen (always the same value, or usually empty)
-const HIDE = new Set(['workflow_state', 'target_warehouse', 'docstatus']);
+let COLS = DS.cols, HIDE = new Set(DS.hide);
 const colSpec = h => COLS[h] || [h, 110, 1, 0];
-const NUMC = new Set(['qty','rate','amount','docstatus']);
+let NUMC = new Set(DS.num);
 const raw = {header: null, idx: null, rows: [], matched: 0, done: false, token: 0, sort: null, view: null, layout: null};
 function computeLayout() {
   const W = $('#tblWrap').clientWidth - 2;
@@ -519,11 +568,11 @@ function computeLayout() {
   raw.layout = {vis, widths: vis.map(i => { const c = colSpec(raw.header[i]); return Math.floor(c[1] + spare * c[2] / wsum); })};
 }
 const visCols = () => { if (!raw.layout) computeLayout(); return raw.layout.vis; };
-const blobCache = new Map();
+let blobCache = new Map();
 async function getMonth(m) {
   if (blobCache.has(m)) { const b = blobCache.get(m); blobCache.delete(m); blobCache.set(m, b); return b; }
   const info = manifest.months[m];
-  const res = await fetch(`dn/${info.file}?v=${encodeURIComponent(manifest.last_refresh)}`);
+  const res = await fetch(`${DS.folder}/${info.file}?v=${encodeURIComponent(manifest.last_refresh)}`);
   if (!res.ok) throw new Error(`Could not download ${info.file} (${res.status})`);
   const blob = await new Response(res.body.pipeThrough(new DecompressionStream('gzip'))).blob();
   blobCache.set(m, blob);
@@ -550,7 +599,8 @@ function setHeader(h) {
   h[0] = h[0].replace(/^\uFEFF/, '');
   raw.header = h;
   const f = n => h.indexOf(n);
-  raw.idx = {dn: f('DN_NO'), date: f('posting_date'), proj: f('Project'), wh: f('source_warehouse'), cat: f('item_category'), code: f('item_code'), name: f('item_name'), amt: f('amount')};
+  const C = DS.col;
+  raw.idx = {dn: f(C.id), date: f(C.date), proj: f(C.proj), wh: f(C.wh), cat: f(C.cat), code: f(C.code), name: f(C.name), amt: f(C.amt), status: C.status ? f(C.status) : -1};
   buildHead();
 }
 function makeMatcher(seg) {
@@ -561,7 +611,8 @@ function makeMatcher(seg) {
     if (names.warehouse && !names.warehouse.has(norm(row[I.wh], 'No warehouse'))) return false;
     if (names.category && !names.category.has(norm(row[I.cat], 'Uncategorised'))) return false;
     if (names.group || names.state) {
-      let ci = cache.get(row[I.proj]); if (!ci) { ci = customerInfo(row[I.proj]); cache.set(row[I.proj], ci); }
+      const ck = I.status >= 0 ? row[I.proj] + '\u0001' + row[I.status] : row[I.proj];
+      let ci = cache.get(ck); if (!ci) { ci = groupState(row[I.proj], row[I.status]); cache.set(ck, ci); }
       if (names.group && !names.group.has(ci[0])) return false;
       if (names.state && !names.state.has(ci[1])) return false;
     }
@@ -656,9 +707,9 @@ function renderBody() {
     const row = rows[r];
     h += '<tr>' + vis.map(i => { const c = H[i];
       const v = row[i] ?? '';
-      if (c === 'DN_NO') return `<td class="dn" data-dn="${esc(v)}">${esc(v)}</td>`;
-      if (c === 'posting_date') return `<td>${fmtDate(v)}</td>`;
-      if (c === 'amount') return `<td class="n amt">${v === '' ? '' : nf2.format(num(v))}</td>`;
+      if (c === DS.col.id) return `<td class="dn" data-dn="${esc(v)}">${esc(v)}</td>`;
+      if (c === DS.col.date) return `<td>${fmtDate(v)}</td>`;
+      if (c === DS.col.amt) return `<td class="n amt">${v === '' ? '' : nf2.format(num(v))}</td>`;
       if (NUMC.has(c)) return `<td class="n">${v === '' ? '' : (c === 'docstatus' ? esc(v) : nf2.format(num(v)))}</td>`;
       return `<td title="${esc(v)}">${esc(v)}</td>`;
     }).join('') + '</tr>';
@@ -698,7 +749,7 @@ $('#dl').addEventListener('click', async () => {
         }, live);
       }
     }
-    const name = `DN_line_items_${st.from}_to_${st.to}${dimF || q ? '_filtered' : ''}.csv`;
+    const name = `${DS.filePrefix}_${st.from}_to_${st.to}${dimF || q ? '_filtered' : ''}.csv`;
     const url = URL.createObjectURL(new Blob(parts, {type: 'text/csv'}));
     const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
@@ -732,10 +783,10 @@ async function update() {
   renderKpis(); renderLists(); loadRaw();
 }
 document.querySelector('#metric').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; st.metric = b.dataset.m; writeHash(); renderControls(); renderLists(); });
-function setupCalendar() {
+function setupCalendar() {   // listeners once; date limits are set per dataset in loadDataset()
   const f = $('#dFrom'), t = $('#dTo');
-  for (const el of [f, t]) { el.min = S.first_date; el.max = S.last_date; }
   const onChange = () => {
+    if (!S) return;
     let a = clampDate(f.value || S.first_date), b = clampDate(t.value || S.last_date);
     if (a > b) [a, b] = [b, a];
     if (a === st.from && b === st.to) { renderControls(); return; }
@@ -750,19 +801,37 @@ $('#copyLink').addEventListener('click', async () => {
   setTimeout(() => $('#copyLink').textContent = 'Copy link to this view', 2000);
 });
 
-(async function init() {
+let loadTok = 0;
+async function loadDataset(key, fromHash) {
+  const my = ++loadTok;
+  DS = DATASETS[key] || DATASETS.dn;
+  COLS = DS.cols; HIDE = new Set(DS.hide); NUMC = new Set(DS.num); DIM_LABEL.group = DS.groupLabel;
+  document.querySelectorAll('#dsSwitch button').forEach(b => b.setAttribute('aria-pressed', b.dataset.ds === DS.page));
+  document.title = DS.title;
+  $('#tGroup').textContent = DS.groupTitle; $('#hGroup').textContent = DS.groupHint; $('#hWh').textContent = DS.whHint;
+  $('#hTable').textContent = DS.tableHint; $('#q').placeholder = DS.searchPh; $('#foot').textContent = DS.footer;
+  // forget everything from the previous dataset
+  raw.token++; upTok++;
+  Object.assign(raw, {header: null, idx: null, rows: [], matched: 0, done: false, sort: null, view: null, layout: null});
+  blobCache = new Map(); partCache = new Map();
+  st.F = {warehouse: new Set(), category: new Set(), group: new Set(), state: new Set()}; st.q = ''; st.expanded = {};
+  $('#q').value = ''; $('#tbl thead').innerHTML = ''; $('#tbl tbody').innerHTML = ''; $('#tbl colgroup').innerHTML = '';
+  $('#chips').innerHTML = ''; $('#fresh').textContent = 'Loading…';
   try {
     const bust = '?t=' + Date.now();
     const [m, s] = await Promise.all([
-      fetch('dn/manifest.json' + bust, {cache: 'no-store'}).then(r => { if (!r.ok) throw new Error('manifest'); return r.json(); }),
-      fetch('dn/summary.json' + bust, {cache: 'no-store'}).then(r => { if (!r.ok) throw new Error('summary'); return r.json(); })
+      fetch(`${DS.folder}/manifest.json` + bust, {cache: 'no-store'}).then(r => { if (!r.ok) throw new Error('manifest'); return r.json(); }),
+      fetch(`${DS.folder}/summary.json` + bust, {cache: 'no-store'}).then(r => { if (!r.ok) throw new Error('summary'); return r.json(); })
     ]);
+    if (my !== loadTok) return;
     manifest = m; S = s; M = S.months;
   } catch (e) {
+    if (my !== loadTok) return;
+    S = null;
+    $('#app').hidden = true; $('#msg').hidden = false; $('#fresh').textContent = '';
     $('#msg').innerHTML = e.message === 'summary'
-      ? 'The dashboard summary hasn\'t been built yet. Go to <b>Actions → Sync DN data → Run workflow</b>, wait for it to finish, then reload this page.'
-      : 'No data yet. Go to <b>Actions → Sync DN data → Run workflow</b>, wait for it to finish, then reload this page.';
-    $('#fresh').textContent = '';
+      ? `The ${DS.docsLabel} summary hasn't been built yet. Go to <b>Actions → ${DS.workflow} → Run workflow</b>, wait for it to finish, then reload this page.`
+      : `No ${DS.docsLabel} data yet. Go to <b>Actions → ${DS.workflow} → Run workflow</b>, wait for it to finish, then reload this page.`;
     return;
   }
   S.dimMap = {}; for (const d of DIMS) S.dimMap[d] = new Map(S.dims[d].map((n, i) => [n, i]));
@@ -770,10 +839,24 @@ $('#copyLink').addEventListener('click', async () => {
   for (const r of S.cube) cubeByMonth[r[0]].push(r);
   for (const r of S.dn_cube) dnByMonth[r[0]].push(r);
   st.from = S.first_date; st.to = S.last_date;
-  readHash();
+  if (fromHash) readHash();
+  else if (DS.defaultExcludeGroup)   // e.g. leave cancelled BOMs out unless asked for
+    S.dims.group.forEach((n, i) => { if (!DS.defaultExcludeGroup.test(n)) st.F.group.add(i); });
+  for (const el of [$('#dFrom'), $('#dTo')]) { el.min = S.first_date; el.max = S.last_date; }
   if (st.q) $('#q').value = st.q;
-  $('#msg').remove(); $('#app').hidden = false;
-  renderHeader(); setupCalendar(); setupTilt(); update();
+  $('#msg').hidden = true; $('#app').hidden = false;
+  renderHeader(); update();
+}
+$('#dsSwitch').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || b.dataset.ds === DS.page) return;
+  loadDataset(b.dataset.ds, false);
+});
+(function init() {
+  let key = 'dn', fromHash = false;
+  try { const h = JSON.parse(decodeURIComponent(location.hash.slice(1)) || '{}'); if (h.d && DATASETS[h.d]) key = h.d; fromHash = !!location.hash; } catch (e) {}
+  if (!fromHash && DATASETS[key].defaultExcludeGroup) fromHash = false;
+  setupCalendar(); setupTilt();
+  loadDataset(key, fromHash);
 })();
 </script>
 </body>
