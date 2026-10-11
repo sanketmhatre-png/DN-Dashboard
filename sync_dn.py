@@ -1,11 +1,11 @@
 """
-Sync DN_S (Delivery Note line items, 2025 onward) from Metabase into dn/ as monthly .csv.gz files.
-Runs in GitHub Actions (sync_dn.yml). METABASE_URL defaults to SolarSquare's Metabase. Needs either:
+Sync BOM_S (BOM line items, BOMs created 2025 onward) from Metabase into bom/ as monthly .csv.gz files.
+Runs in GitHub Actions (sync_bom.yml). METABASE_URL defaults to SolarSquare's Metabase. Needs either:
   - METABASE_USERNAME and METABASE_PASSWORD (your normal Metabase login), or
   - METABASE_API_KEY (created by a Metabase admin)
 
-    python sync_dn.py          # missing months + refresh the last 2 months
-    python sync_dn.py --full   # re-export every month
+    python sync_bom.py          # missing months + refresh the last 2 months
+    python sync_bom.py --full   # re-export every month
 """
 import csv, gzip, io, json, os, re, sys, time
 from datetime import date, datetime, timezone
@@ -18,21 +18,20 @@ USERNAME = os.environ.get("METABASE_USERNAME", "")
 PASSWORD = os.environ.get("METABASE_PASSWORD", "")
 DATABASE_ID = 9                     # ERP (MySQL)
 START = date(2025, 1, 1)
-OUT_DIR = Path("dn")
-REFRESH_MONTHS = 2                  # current + previous month (catches cancelled/amended DNs)
+OUT_DIR = Path("bom")
+REFRESH_MONTHS = 2                  # current + previous month (catches BOMs cancelled or completed since)
 
-# Same SQL as Metabase question DN_S (#5728), limited to one month at a time.
+# Same columns as Metabase question BOM_S (#5883), plus the BOM creation date and the item category,
+# one month (by BOM creation date) at a time.
 SQL = """
-SELECT dni.parent AS DN_NO, dn.posting_date, dn.customer AS Project, dn.workflow_state,
-       dni.warehouse AS source_warehouse, dni.target_warehouse AS target_warehouse,
-       dni.custom_item_category AS item_category, dni.custom_item_subcategory AS item_subcategory,
-       dni.item_code, dni.item_name, dni.qty, dni.uom AS uohm, dni.rate, dni.amount,
-       dn.status AS `Delivery Note Status`, dn.docstatus
-FROM `tabDelivery Note Item` dni
-LEFT JOIN `tabDelivery Note` dn ON dni.parent = dn.name
-WHERE dn.docstatus = 1
-  AND dn.posting_date >= '{start}' AND dn.posting_date < '{end}'
-ORDER BY dn.posting_date DESC
+SELECT b.name AS bom_id, DATE(b.creation) AS creation_date, b.project, b.item, b.item_name, b.quantity,
+       b.warehouse, bi.name AS bom_item_name, it.custom_item_category AS item_category, bi.item_code,
+       bi.item_name AS bom_item_item_name, bi.qty, bi.rate, bi.amount, b.workflow_state, b.docstatus
+FROM tabBOM b
+JOIN `tabBOM Item` bi ON b.name = bi.parent
+LEFT JOIN tabItem it ON it.name = bi.item_code
+WHERE b.creation >= '{start}' AND b.creation < '{end}'
+ORDER BY b.creation DESC
 """
 
 def months(start, end):
@@ -101,7 +100,7 @@ STATES = {"MH": "Maharashtra", "UP": "Uttar Pradesh", "MP": "Madhya Pradesh", "T
           "PB": "Punjab", "WB": "West Bengal", "KL": "Kerala", "OR": "Odisha", "OD": "Odisha",
           "BR": "Bihar", "UK": "Uttarakhand", "JH": "Jharkhand", "GA": "Goa", "AS": "Assam"}
 NO_STATE = "Not state-coded"
-# Keep these rules identical to customerInfo() in index.html
+# Keep these rules identical to customerInfo() in bom.html
 def customer_info(c):
     c = (c or "").strip()
     m = re.match(r"^(RSSE|SSE)([A-Z]{2})", c)
@@ -138,14 +137,15 @@ def build_summary(manifest):
         path = OUT_DIR / manifest["months"][key]["file"]
         with gzip.open(path, "rt", encoding="utf-8", newline="") as f:
             for row in csv.DictReader(f):
-                cust = row.get("Project", "")
+                cust = row.get("project", "")
                 if cust not in cust_cache:
                     cust_cache[cust] = customer_info(cust)
-                g, st = cust_cache[cust]
-                w = idx("warehouse", norm(row.get("source_warehouse"), "No warehouse"))
+                st = cust_cache[cust][1]
+                g = norm(row.get("workflow_state"), "No status")      # BOM status is the "group" here
+                w = idx("warehouse", norm(row.get("warehouse"), "No warehouse"))
                 c = idx("category", norm(row.get("item_category"), "Uncategorised"))
                 gi, si = idx("group", g), idx("state", st)
-                dn = row.get("DN_NO", "")
+                dn = row.get("bom_id", "")
                 k = (mi, w, c, gi, si)
                 cell = cube.get(k)
                 if cell is None:
@@ -154,7 +154,7 @@ def build_summary(manifest):
                 cell[1] += num(row.get("amount"))
                 cell[2].add(dn)
                 dn_cube.setdefault((mi, w, gi, si), set()).add(dn)
-                d = (row.get("posting_date") or "")[:10]
+                d = (row.get("creation_date") or "")[:10]
                 if d:
                     first_date = d if not first_date or d < first_date else first_date
                     last_date = d if not last_date or d > last_date else last_date
@@ -162,9 +162,9 @@ def build_summary(manifest):
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "first_date": first_date, "last_date": last_date,
         "months": months, "dims": dims,
-        # cube rows: month, warehouse, category, group, state, line items, amount, delivery notes
+        # cube rows: month, warehouse, category, status, state, line items, amount, BOMs
         "cube": [[*k, v[0], round(v[1]), len(v[2])] for k, v in cube.items()],
-        # delivery notes without category split (exact DN counts when no category filter)
+        # BOMs without category split (exact BOM counts when no category filter)
         "dn_cube": [[*k, len(v)] for k, v in dn_cube.items()],
     }
 
