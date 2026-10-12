@@ -12,9 +12,8 @@ on:
         description: "Re-export every month (slow)"
         type: boolean
         default: false
-  # Uncomment to also refresh both automatically every day at 10:00 AM IST:
-  # schedule:
-  #   - cron: "30 4 * * *"
+  schedule:
+    - cron: "30 2 * * *"     # every day at 8:00 AM IST
 
 permissions:
   contents: write
